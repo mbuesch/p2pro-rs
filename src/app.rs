@@ -2,13 +2,11 @@
 //! and a color-scale legend. See `camera.rs` for the capture thread that
 //! feeds this UI through shared state.
 
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-
-use dioxus::prelude::*;
-
 use crate::camera::{CaptureState, ThermalFrame};
 use crate::colormap;
+use dioxus::prelude::*;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 const CSS: &str = include_str!("style.css");
 
