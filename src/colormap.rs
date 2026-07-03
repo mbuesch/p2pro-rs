@@ -50,7 +50,7 @@ pub fn build_lut() -> Vec<[u8; 4]> {
 pub fn css_gradient() -> String {
     let stops: Vec<String> = STOPS
         .iter()
-        .map(|(t, [r, g, b])| format!("#{r:02x}{g:02x}{b:02x} {:.0}%", (1.0 - t) * 100.0))
+        .map(|(t, [r, g, b])| format!("#{r:02x}{g:02x}{b:02x} {:.0}%", t * 100.0))
         .collect();
-    format!("linear-gradient(to bottom, {})", stops.join(", "))
+    format!("linear-gradient(to top, {})", stops.join(", "))
 }
