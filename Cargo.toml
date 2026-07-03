@@ -1,12 +1,29 @@
 [package]
 name = "p2pro-rs"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+authors = [ "Michael Büsch <m@bues.ch>" ]
+#homepage = "https://bues.ch/"
+#repository = "https://github.com/mbuesch/"
+readme = "README.md"
+#categories = [ ]
+#keywords = [ ]
 
 [dependencies]
 base64 = "0.22"
-clap = { version = "4", features = ["derive"] }
-dioxus = { version = "0.7", features = ["desktop"] }
-image = { version = "0.25", default-features = false, features = ["png"] }
-tokio = { version = "1", default-features = false, features = ["time"] }
+clap = { version = "4", features = [ "derive" ] }
+dioxus = { version = "0.7", features = [ "desktop" ] }
+image = { version = "0.25", default-features = false, features = [ "png" ] }
+tokio = { version = "1", default-features = false, features = [ "time" ] }
 v4l = "0.14"
+
+[profile.dev]
+debug = "limited"
+panic = "abort"
+
+[profile.release]
+lto = "fat"
+panic = "abort"
+strip = "symbols"

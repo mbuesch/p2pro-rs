@@ -8,14 +8,17 @@
 //! the original implementation this was ported from.
 
 use crate::render;
-use std::io;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use v4l::buffer::Type;
-use v4l::io::mmap::Stream as MmapStream;
-use v4l::io::traits::CaptureStream;
-use v4l::video::Capture;
-use v4l::{Device, Format, FourCC};
+use std::{
+    io,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+use v4l::{
+    Device, Format, FourCC,
+    buffer::Type,
+    io::{mmap::Stream as MmapStream, traits::CaptureStream},
+    video::Capture,
+};
 
 /// Width of both the video and thermal half, in pixels.
 pub const WIDTH: u32 = 256;

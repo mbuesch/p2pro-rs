@@ -2,8 +2,7 @@
 //! min/max statistics needed to draw markers and the legend.
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use image::codecs::png::PngEncoder;
-use image::{ExtendedColorType, ImageEncoder};
+use image::{ExtendedColorType, ImageEncoder, codecs::png::PngEncoder};
 
 /// Result of rendering one frame: a ready-to-embed PNG data URI, the
 /// min/max temperatures found, and their pixel coordinates.
