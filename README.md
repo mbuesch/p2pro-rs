@@ -39,4 +39,10 @@ cargo run --release -- /dev/video2
 
 ## License
 
+Copyright (c) 2026 Michael Büsch
+
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Acknowledgements
+
+Original p2pro-live application: Copyright (c) 2024 Klaus Schwarzburg

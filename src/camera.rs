@@ -55,7 +55,7 @@ pub fn capture_loop(device_path: String, shared: Arc<Mutex<CaptureState>>) {
             *shared.lock().unwrap() =
                 CaptureState::Error(format!("{device_path}: {e} (retrying...)"));
         }
-        std::thread::sleep(Duration::from_secs(2));
+        std::thread::sleep(Duration::from_secs(1));
     }
 }
 
