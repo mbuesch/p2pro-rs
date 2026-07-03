@@ -10,74 +10,7 @@ use dioxus::prelude::*;
 use crate::camera::{CaptureState, ThermalFrame};
 use crate::colormap;
 
-const CSS: &str = r#"
-:root { color-scheme: dark; }
-body {
-    margin: 0;
-    background: #101114;
-    color: #e8e8e8;
-    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-}
-#app { padding: 20px; }
-h1 { font-size: 1.3rem; font-weight: 600; margin: 0 0 4px 0; }
-.subtitle { margin: 0 0 16px 0; color: #9a9a9a; font-size: 0.9rem; }
-.status { font-size: 1rem; opacity: 0.85; }
-.status.error { color: #ff6b6b; }
-.viewer { display: flex; gap: 20px; align-items: flex-start; }
-.image-wrap {
-    position: relative;
-    width: 640px;
-    height: 480px;
-    background: #000;
-    border: 1px solid #333;
-}
-.thermal-img {
-    width: 100%;
-    height: 100%;
-    display: block;
-    image-rendering: pixelated;
-}
-.marker {
-    position: absolute;
-    transform: translate(-50%, -50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    pointer-events: none;
-}
-.marker .dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 2px solid white;
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
-}
-.marker-max .dot { background: #ff3b30; }
-.marker-min .dot { background: #3b82ff; }
-.marker .label {
-    margin-top: 3px;
-    font-size: 12px;
-    font-weight: 600;
-    background: rgba(0, 0, 0, 0.6);
-    padding: 1px 5px;
-    border-radius: 3px;
-    white-space: nowrap;
-}
-.legend { display: flex; flex-direction: row; gap: 8px; }
-.legend-bar {
-    width: 28px;
-    height: 480px;
-    border: 1px solid #333;
-}
-.legend-labels {
-    height: 480px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    font-size: 13px;
-    padding: 2px 0;
-}
-"#;
+const CSS: &str = include_str!("style.css");
 
 #[component]
 pub fn App() -> Element {
@@ -104,8 +37,7 @@ pub fn App() -> Element {
     rsx! {
         style { "{CSS}" }
         div { id: "app",
-            h1 { "P2Pro Thermal Viewer" }
-            p { class: "subtitle", "false-color view - auto-scaled to the current frame's min/max" }
+            h1 { "P2Pro" }
             match current {
                 CaptureState::Connecting => rsx! {
                     p { class: "status", "Connecting to camera..." }
