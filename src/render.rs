@@ -10,7 +10,7 @@ use image::{
 use movavg::MovAvg;
 
 /// Number of frames over which to smooth the min/max temperature values.
-const MINMAX_TEMP_SMOOTHING: usize = 40;
+const MINMAX_TEMP_SMOOTHING: usize = 30;
 
 /// Result of rendering one frame: a ready-to-embed PNG data URI, the
 /// min/max temperatures found, and their pixel coordinates.
