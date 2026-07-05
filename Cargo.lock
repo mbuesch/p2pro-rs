@@ -2688,6 +2688,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "movavg"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30c189125d8c0755b71758a81262c41f843f8de42acba3b47c03c6f737cfffe6"
+dependencies = [
+ "autocfg",
+ "num-traits",
+]
+
+[[package]]
 name = "moxcms"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3073,6 +3083,7 @@ dependencies = [
  "clap",
  "dioxus",
  "image",
+ "movavg",
  "tokio",
  "v4l",
 ]

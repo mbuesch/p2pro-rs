@@ -7,6 +7,10 @@ use image::{
     ExtendedColorType, ImageEncoder,
     codecs::png::{CompressionType, FilterType, PngEncoder},
 };
+use movavg::MovAvg;
+
+/// Number of frames over which to smooth the min/max temperature values.
+const MINMAX_TEMP_SMOOTHING: usize = 40;
 
 /// Result of rendering one frame: a ready-to-embed PNG data URI, the
 /// min/max temperatures found, and their pixel coordinates.
@@ -20,18 +24,22 @@ pub struct RenderedFrame {
 
 pub struct Renderer {
     color_lut: [[u8; 4]; 256],
+    min_temp: MovAvg<f32, f32, MINMAX_TEMP_SMOOTHING>,
+    max_temp: MovAvg<f32, f32, MINMAX_TEMP_SMOOTHING>,
 }
 
 impl Renderer {
     pub fn new() -> Self {
         Self {
             color_lut: build_color_lut(),
+            min_temp: MovAvg::new(),
+            max_temp: MovAvg::new(),
         }
     }
 
     /// Maps `temps` (row-major, `width` x `height`) through `lut` after
     /// auto-scaling to the frame's own min/max, and encodes the result as PNG.
-    pub fn build_frame(&self, width: u32, height: u32, temps: &[f32]) -> RenderedFrame {
+    pub fn build_frame(&mut self, width: u32, height: u32, temps: &[f32]) -> RenderedFrame {
         let mut min_temp = f32::MAX;
         let mut max_temp = f32::MIN;
         let mut min_pos = (0u32, 0u32);
@@ -50,8 +58,11 @@ impl Renderer {
             }
         }
 
+        // Smooth the min/max over the last N frames.
+        min_temp = self.min_temp.feed(min_temp);
+        max_temp = self.max_temp.feed(max_temp);
+
         // Auto-scale: the color range always spans exactly this frame's min/max.
-        //TODO
         let range = (max_temp - min_temp).max(0.1);
 
         let mut rgba = vec![0u8; (width * height * 4) as usize];

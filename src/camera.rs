@@ -6,7 +6,7 @@
 //! YUYV luma/chroma pair are instead a little-endian 16-bit raw sample.
 
 use crate::render::Renderer;
-use std::{io, time::Duration};
+use std::{io, sync::Mutex, time::Duration};
 use tokio::sync::watch;
 use v4l::{
     Device, Format, FourCC,
@@ -44,7 +44,7 @@ pub struct ThermalFrame {
 pub struct Camera {
     device_path: String,
     to_ui: watch::Sender<CaptureState>,
-    renderer: Renderer,
+    renderer: Mutex<Renderer>,
 }
 
 impl Camera {
@@ -67,7 +67,7 @@ impl Camera {
         Self {
             device_path,
             to_ui,
-            renderer: Renderer::new(),
+            renderer: Mutex::new(Renderer::new()),
         }
     }
 
@@ -118,7 +118,11 @@ impl Camera {
             }
         }
 
-        let rendered = self.renderer.build_frame(WIDTH, HEIGHT, &temps);
+        let rendered = self
+            .renderer
+            .lock()
+            .expect("Lock poisoned")
+            .build_frame(WIDTH, HEIGHT, &temps);
         Some(ThermalFrame {
             data_uri: rendered.data_uri,
             width: WIDTH,
