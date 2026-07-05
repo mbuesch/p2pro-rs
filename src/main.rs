@@ -1,6 +1,10 @@
-use crate::camera::{Camera, CaptureState};
+use crate::camera::Camera;
 use clap::Parser;
-use tokio::sync::watch;
+use std::sync::Arc;
+use tokio::{
+    sync::{Mutex as AsyncMutex, mpsc},
+    task,
+};
 
 mod app;
 mod camera;
@@ -13,17 +17,24 @@ struct Args {
     device: String,
 }
 
-fn main() {
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
+async fn main() {
     let args = Args::parse();
 
-    let (tx, rx) = watch::channel(CaptureState::Connecting);
+    let (tx, rx) = mpsc::channel(32);
 
-    std::thread::spawn({
+    task::spawn({
         let device_path = args.device;
-        move || Camera::capture_loop(device_path, tx)
+        async move { Camera::capture_loop(device_path, tx).await }
     });
 
-    dioxus::LaunchBuilder::new()
-        .with_context(rx)
-        .launch(app::App);
+    let builder = dioxus::LaunchBuilder::desktop();
+
+    tokio::task::unconstrained({
+        let rx = Arc::new(AsyncMutex::new(rx));
+        async move {
+            builder.with_context(rx).launch(app::App);
+        }
+    })
+    .await;
 }

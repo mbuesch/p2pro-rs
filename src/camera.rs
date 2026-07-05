@@ -7,7 +7,7 @@
 
 use crate::render::Renderer;
 use std::{io, sync::Mutex, time::Duration};
-use tokio::sync::watch;
+use tokio::sync::mpsc;
 use v4l::{
     Device, Format, FourCC,
     buffer::Type,
@@ -43,7 +43,7 @@ pub struct ThermalFrame {
 
 pub struct Camera {
     device_path: String,
-    to_ui: watch::Sender<CaptureState>,
+    to_ui: mpsc::Sender<CaptureState>,
     renderer: Mutex<Renderer>,
 }
 
@@ -51,19 +51,21 @@ impl Camera {
     /// Runs forever on a dedicated OS thread: (re)connects to the camera and
     /// streams frames into `to_ui`, retrying every couple seconds on error
     /// (e.g. camera unplugged or not found yet).
-    pub fn capture_loop(device_path: String, to_ui: watch::Sender<CaptureState>) {
+    pub async fn capture_loop(device_path: String, to_ui: mpsc::Sender<CaptureState>) {
         let camera = Camera::new(device_path.clone(), to_ui.clone());
         loop {
-            if let Err(e) = camera.run_session() {
-                let _ = to_ui.send(CaptureState::Error(format!(
-                    "{device_path}: {e} (retrying...)"
-                )));
+            if let Err(e) = camera.run_session().await {
+                let _ = to_ui
+                    .send(CaptureState::Error(format!(
+                        "{device_path}: {e} (retrying...)"
+                    )))
+                    .await;
             }
-            std::thread::sleep(Duration::from_secs(1));
+            tokio::time::sleep(Duration::from_secs(1)).await;
         }
     }
 
-    fn new(device_path: String, to_ui: watch::Sender<CaptureState>) -> Self {
+    fn new(device_path: String, to_ui: mpsc::Sender<CaptureState>) -> Self {
         Self {
             device_path,
             to_ui,
@@ -71,7 +73,7 @@ impl Camera {
         }
     }
 
-    fn run_session(&self) -> io::Result<()> {
+    async fn run_session(&self) -> io::Result<()> {
         let dev = Device::with_path(&self.device_path)?;
 
         let requested = Format::new(WIDTH, HEIGHT * 2, FourCC::new(b"YUYV"));
@@ -91,7 +93,7 @@ impl Camera {
         loop {
             let (buf, _meta) = stream.next()?;
             if let Some(frame) = self.decode_frame(buf, &fmt) {
-                let _ = self.to_ui.send(CaptureState::Frame(frame));
+                let _ = self.to_ui.send(CaptureState::Frame(frame)).await;
             }
         }
     }

@@ -7,27 +7,27 @@ use crate::{
     colormap,
 };
 use dioxus::prelude::*;
-use tokio::sync::watch;
+use std::sync::Arc;
+use tokio::sync::{Mutex as AsyncMutex, mpsc};
 
 const CSS: &str = include_str!("style.css");
 
 #[component]
 pub fn App() -> Element {
-    let shared = use_context::<watch::Receiver<CaptureState>>();
+    let from_cam = use_context::<Arc<AsyncMutex<mpsc::Receiver<CaptureState>>>>();
     let mut state = use_signal(|| CaptureState::Connecting);
 
     // Long-lived background task:
-    // Waits on the capture thread's `watch` channel and re-renders the UI as soon as it changes.
+    // Waits on the capture thread's `mpsc` channel and re-renders the UI as soon as it changes.
     use_hook(|| {
-        let mut shared = shared.clone();
         spawn(async move {
+            let mut from_cam = from_cam.lock().await;
             loop {
-                let snapshot = shared.borrow_and_update().clone();
-                state.set(snapshot);
-                if let Err(e) = shared.changed().await {
-                    eprintln!("Error: Capture thread has exited: {e}");
+                let Some(snapshot) = from_cam.recv().await else {
+                    eprintln!("Error: Capture thread has exited");
                     break;
-                }
+                };
+                state.set(snapshot);
             }
         })
     });
