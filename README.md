@@ -23,20 +23,28 @@ Currently this app only works on Linux.
 
 ## Running
 
-You can build and run it directly from this source tree with the Rust build system `cargo`:
+First install [Rust](https://www.rust-lang.org/tools/install) and then build the app with cargo:
 
 ```sh
-cargo run --release
+cargo build --release
 ```
 
-This will first compile the app and then run it.
+Then run the built executable:
+
+```sh
+./target/release/p2pro-rs
+```
+
 The app will probe `/dev/video*` for a P2Pro camera and open the first one it finds.
 
 If you want to specify a particular device, you can pass it as the first argument:
 
 ```sh
-cargo run --release -- /dev/video2
+./target/release/p2pro-rs /dev/video2
 ```
+
+There is no need to install the app.
+You can just copy the `p2pro-rs` binary to a convenient location and run it from there.
 
 ## License
 
