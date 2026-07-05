@@ -2,7 +2,7 @@
 name = "p2pro-rs"
 version = "1.0.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.91"
 license = "MIT"
 authors = [ "Michael Büsch <m@bues.ch>" ]
 #homepage = "https://bues.ch/"
