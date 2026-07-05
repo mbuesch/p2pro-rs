@@ -65,10 +65,11 @@ impl Renderer {
         // Auto-scale: the color range always spans exactly this frame's min/max.
         let range = (max_temp - min_temp).max(0.1);
 
-        let mut rgba = vec![0u8; (width * height * 4) as usize];
-        for (i, &t) in temps.iter().enumerate() {
+        // Convert to RGBA8 using the color LUT.
+        let mut rgba = Vec::with_capacity((width * height * 4) as usize);
+        for t in temps {
             let n = (((t - min_temp) / range) * 255.0).clamp(0.0, 255.0) as usize;
-            rgba[i * 4..i * 4 + 4].copy_from_slice(&self.color_lut[n]);
+            rgba.extend(&self.color_lut[n]);
         }
 
         // Encode as data URI for embedding in HTML.
