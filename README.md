@@ -17,9 +17,22 @@ The P2Pro shows up as a standard UVC webcam.
 This app opens it directly via Video4Linux2 (the `v4l` crate) and requests raw `YUYV` frames at 256x384.
 The top half of that buffer is a normal 8-bit preview (ignored here) and the bottom half is actually raw 16-bit temperature samples packed into what looks like YUYV bytes.
 
+## Operating System Support
+
+Currently this app only works on Linux.
+
 ## Running
 
 You can build and run it directly from this source tree with the Rust build system `cargo`:
+
+```sh
+cargo run --release
+```
+
+This will first compile the app and then run it.
+The app will probe `/dev/video*` for a P2Pro camera and open the first one it finds.
+
+If you want to specify a particular device, you can pass it as the first argument:
 
 ```sh
 cargo run --release -- /dev/video2
