@@ -42,8 +42,8 @@ impl Renderer {
     pub fn build_frame(&mut self, width: u32, height: u32, temps: &[f32]) -> RenderedFrame {
         let mut min_temp = f32::MAX;
         let mut max_temp = f32::MIN;
-        let mut min_pos = (0u32, 0u32);
-        let mut max_pos = (0u32, 0u32);
+        let mut min_pos = (0, 0);
+        let mut max_pos = (0, 0);
 
         for (i, &t) in temps.iter().enumerate() {
             let x = i as u32 % width;

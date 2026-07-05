@@ -126,6 +126,7 @@ impl Camera {
             .lock()
             .expect("Lock poisoned")
             .build_frame(WIDTH, HEIGHT, &temps);
+
         Some(ThermalFrame {
             data_uri: rendered.data_uri,
             width: WIDTH,
