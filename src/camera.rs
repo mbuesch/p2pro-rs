@@ -6,11 +6,13 @@
 //! YUYV luma/chroma pair are instead a little-endian 16-bit raw sample.
 
 use crate::render::Renderer;
-use std::{io, sync::Mutex, time::Duration};
+use anyhow::{self as ah, format_err as err};
+use std::{sync::Mutex, time::Duration};
 use tokio::sync::mpsc;
 use v4l::{
     Device, Format, FourCC,
     buffer::Type,
+    capability::Flags,
     io::{mmap::Stream as MmapStream, traits::CaptureStream},
     video::Capture,
 };
@@ -73,20 +75,36 @@ impl Camera {
         }
     }
 
-    async fn run_session(&self) -> io::Result<()> {
+    async fn run_session(&self) -> ah::Result<()> {
         let dev = Device::with_path(&self.device_path)?;
+
+        let caps = dev.query_caps()?;
+
+        if !caps.capabilities.contains(Flags::VIDEO_CAPTURE) {
+            return Err(err!(
+                "Device '{}' is not a video capture device",
+                self.device_path
+            ));
+        }
 
         let requested = Format::new(WIDTH, HEIGHT * 2, FourCC::new(b"YUYV"));
         let fmt = dev.set_format(&requested)?;
-        if fmt.width != WIDTH || fmt.height != HEIGHT * 2 {
-            return Err(io::Error::other(format!(
-                "camera reported an unexpected format {}x{} (wanted {}x{})",
+        if fmt.width != requested.width
+            || fmt.height != requested.height
+            || fmt.fourcc != requested.fourcc
+        {
+            return Err(err!(
+                "Camera reported an unexpected format {}x{}/{} (wanted {}x{}/{})",
                 fmt.width,
                 fmt.height,
-                WIDTH,
-                HEIGHT * 2
-            )));
+                fmt.fourcc,
+                requested.width,
+                requested.height,
+                requested.fourcc
+            ));
         }
+
+        println!("Using device: {}", caps.bus);
 
         let mut stream = MmapStream::with_buffers(&dev, Type::VideoCapture, 4)?;
 

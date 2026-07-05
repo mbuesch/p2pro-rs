@@ -12,6 +12,7 @@ categories = [ "graphics", "hardware-support", "science" ]
 keywords = [ "infiray", "p2pro", "thermal", "camera" ]
 
 [dependencies]
+anyhow = "1"
 base64 = "0.22"
 clap = { version = "4", features = [ "derive" ] }
 dioxus = { version = "0.7", features = [ "desktop" ] }
