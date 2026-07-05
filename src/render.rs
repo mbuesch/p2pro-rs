@@ -2,7 +2,10 @@
 //! min/max statistics needed to draw markers and the legend.
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use image::{ExtendedColorType, ImageEncoder, codecs::png::PngEncoder};
+use image::{
+    ExtendedColorType, ImageEncoder,
+    codecs::png::{CompressionType, FilterType, PngEncoder},
+};
 
 /// Result of rendering one frame: a ready-to-embed PNG data URI, the
 /// min/max temperatures found, and their pixel coordinates.
@@ -44,11 +47,14 @@ pub fn build_frame(width: u32, height: u32, temps: &[f32], lut: &[[u8; 4]]) -> R
         rgba[i * 4..i * 4 + 4].copy_from_slice(&lut[n]);
     }
 
-    let mut png_bytes = Vec::new();
-    PngEncoder::new(&mut png_bytes)
+    // Encode as data URI for embedding in HTML.
+    let mut png_bytes = Vec::with_capacity(1024 * 512);
+    PngEncoder::new_with_quality(&mut png_bytes, CompressionType::Fast, FilterType::Sub)
         .write_image(&rgba, width, height, ExtendedColorType::Rgba8)
         .expect("encoding a thermal frame to PNG should never fail");
-    let data_uri = format!("data:image/png;base64,{}", STANDARD.encode(&png_bytes));
+    let mut data_uri = String::with_capacity(png_bytes.len() * 2);
+    data_uri.push_str("data:image/png;base64,");
+    STANDARD.encode_string(&png_bytes, &mut data_uri);
 
     RenderedFrame {
         data_uri,
