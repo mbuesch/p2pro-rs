@@ -24,6 +24,10 @@ h1 {
     opacity: 0.85;
 }
 
+.status.info {
+    color: #3b82ff;
+}
+
 .status.error {
     color: #ff6b6b;
 }

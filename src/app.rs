@@ -42,9 +42,18 @@ pub fn App() -> Element {
                 CaptureState::Connecting => rsx! {
                     p { class: "status", "Connecting to camera..." }
                 },
-                CaptureState::Error(msg) => rsx! {
-                    p { class: "status error", "{msg}" }
-                },
+                ref c @ CaptureState::Info(ref msg) | ref c @ CaptureState::Error(ref msg) => {
+                    rsx! {
+                        p { class: if matches!(c, CaptureState::Info(_)) { "status info" } else { "status error" },
+                            for (i, line) in msg.split('\n').enumerate() {
+                                if i > 0 {
+                                    br {}
+                                }
+                                "{line}"
+                            }
+                        }
+                    }
+                }
                 CaptureState::Frame(frame) => rsx! {
                     ThermalView { frame }
                 },
@@ -55,10 +64,10 @@ pub fn App() -> Element {
 
 #[component]
 fn ThermalView(frame: ThermalFrame) -> Element {
-    let min_left = pct(frame.min_pos.0, frame.width);
-    let min_top = pct(frame.min_pos.1, frame.height);
-    let max_left = pct(frame.max_pos.0, frame.width);
-    let max_top = pct(frame.max_pos.1, frame.height);
+    let min_left = percent(frame.min_pos.0, frame.width);
+    let min_top = percent(frame.min_pos.1, frame.height);
+    let max_left = percent(frame.max_pos.0, frame.width);
+    let max_top = percent(frame.max_pos.1, frame.height);
     let gradient = colormap::css_gradient();
 
     rsx! {
@@ -91,7 +100,7 @@ fn ThermalView(frame: ThermalFrame) -> Element {
 
 /// Percentage position of pixel coordinate `v` along an axis of `total`
 /// pixels, for placing a marker over the (CSS-scaled) image.
-fn pct(v: u32, total: u32) -> f32 {
+fn percent(v: u32, total: u32) -> f32 {
     if total <= 1 {
         0.0
     } else {

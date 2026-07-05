@@ -1,7 +1,7 @@
 use crate::camera::Camera;
 use clap::Parser;
 use dioxus::desktop::{Config, WindowBuilder};
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 use tokio::{
     sync::{Mutex as AsyncMutex, mpsc},
     task,
@@ -23,7 +23,10 @@ fn load_window_icon() -> Option<dioxus::desktop::tao::window::Icon> {
 #[derive(Parser)]
 struct Args {
     /// Path to the p2pro camera device (e.g. `/dev/video2`).
-    device: String,
+    ///
+    /// If not specified, all existing /dev/video* devices will be probed
+    /// and the first found p2pro device will be used.
+    device: Option<PathBuf>,
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
@@ -34,7 +37,7 @@ async fn main() {
 
     task::spawn({
         let device_path = args.device;
-        async move { Camera::capture_loop(device_path, tx).await }
+        async move { Camera::capture_loop(device_path.as_deref(), tx).await }
     });
 
     let window = WindowBuilder::new()

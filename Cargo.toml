@@ -18,7 +18,7 @@ clap = { version = "4", features = [ "derive" ] }
 dioxus = { version = "0.7", features = [ "desktop" ] }
 image = { version = "0.25", default-features = false, features = [ "png" ] }
 movavg = "2"
-tokio = { version = "1", default-features = false, features = [ "sync", "rt-multi-thread" ] }
+tokio = { version = "1", default-features = false, features = [ "sync", "fs", "rt-multi-thread" ] }
 v4l = "0.14"
 
 [profile.dev]
