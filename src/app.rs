@@ -7,29 +7,27 @@ use crate::{
     colormap,
 };
 use dioxus::prelude::*;
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use tokio::sync::watch;
 
 const CSS: &str = include_str!("style.css");
 
 #[component]
 pub fn App() -> Element {
-    let shared = use_context::<Arc<Mutex<CaptureState>>>();
+    let shared = use_context::<watch::Receiver<CaptureState>>();
     let mut state = use_signal(|| CaptureState::Connecting);
 
-    // Long-lived background task: polls the capture thread's shared state
-    // and mirrors it into a signal so the UI re-renders when it changes.
-    // `App` is the root component and is never unmounted, so a plain
-    // `spawn` (owned by this same scope) lives for the whole app run.
+    // Long-lived background task:
+    // Waits on the capture thread's `watch` channel and re-renders the UI as soon as it changes.
     use_hook(|| {
-        let shared = shared.clone();
+        let mut shared = shared.clone();
         spawn(async move {
             loop {
-                let snapshot = { shared.lock().unwrap().clone() };
+                let snapshot = shared.borrow_and_update().clone();
                 state.set(snapshot);
-                tokio::time::sleep(Duration::from_millis(120)).await;
+                if let Err(e) = shared.changed().await {
+                    eprintln!("Error: Capture thread has exited: {e}");
+                    break;
+                }
             }
         })
     });
@@ -97,6 +95,6 @@ fn pct(v: u32, total: u32) -> f32 {
     if total <= 1 {
         0.0
     } else {
-        v as f32 / (total - 1) as f32 * 100.0
+        (v as f32 / (total - 1) as f32 * 100.0).clamp(0.0, 100.0)
     }
 }

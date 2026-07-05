@@ -1,6 +1,6 @@
 use crate::camera::CaptureState;
 use clap::Parser;
-use std::sync::{Arc, Mutex};
+use tokio::sync::watch;
 
 mod app;
 mod camera;
@@ -16,14 +16,11 @@ fn main() {
     let args = Args::parse();
     let device_path = args.device;
 
-    let shared: Arc<Mutex<CaptureState>> = Arc::new(Mutex::new(CaptureState::Connecting));
+    let (tx, rx) = watch::channel(CaptureState::Connecting);
 
-    std::thread::spawn({
-        let shared = shared.clone();
-        move || camera::capture_loop(device_path, shared)
-    });
+    std::thread::spawn(move || camera::capture_loop(device_path, tx));
 
     dioxus::LaunchBuilder::new()
-        .with_context(shared)
+        .with_context(rx)
         .launch(app::App);
 }

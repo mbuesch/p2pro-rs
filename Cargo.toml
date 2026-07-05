@@ -16,7 +16,7 @@ base64 = "0.22"
 clap = { version = "4", features = [ "derive" ] }
 dioxus = { version = "0.7", features = [ "desktop" ] }
 image = { version = "0.25", default-features = false, features = [ "png" ] }
-tokio = { version = "1", default-features = false, features = [ "time" ] }
+tokio = { version = "1", default-features = false, features = [ "sync" ] }
 v4l = "0.14"
 
 [profile.dev]

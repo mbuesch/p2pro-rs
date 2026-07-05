@@ -8,11 +8,8 @@
 //! the original implementation this was ported from.
 
 use crate::render;
-use std::{
-    io,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{io, time::Duration};
+use tokio::sync::watch;
 use v4l::{
     Device, Format, FourCC,
     buffer::Type,
@@ -26,7 +23,8 @@ pub const WIDTH: u32 = 256;
 /// twice this, since it also contains the plain video half on top).
 pub const HEIGHT: u32 = 192;
 
-/// Shared state, polled by the UI and written to by the capture thread.
+/// Shared state, signalled to the UI via a `tokio::sync::watch` channel and
+/// written to by the capture thread.
 #[derive(Clone)]
 pub enum CaptureState {
     Connecting,
@@ -48,12 +46,13 @@ pub struct ThermalFrame {
 /// Runs forever on a dedicated OS thread: (re)connects to the camera and
 /// streams frames into `shared`, retrying every couple seconds on error
 /// (e.g. camera unplugged or not found yet).
-pub fn capture_loop(device_path: String, shared: Arc<Mutex<CaptureState>>) {
+pub fn capture_loop(device_path: String, shared: watch::Sender<CaptureState>) {
     let lut = crate::colormap::build_lut();
     loop {
         if let Err(e) = run_session(&device_path, &shared, &lut) {
-            *shared.lock().unwrap() =
-                CaptureState::Error(format!("{device_path}: {e} (retrying...)"));
+            let _ = shared.send(CaptureState::Error(format!(
+                "{device_path}: {e} (retrying...)"
+            )));
         }
         std::thread::sleep(Duration::from_secs(1));
     }
@@ -61,7 +60,7 @@ pub fn capture_loop(device_path: String, shared: Arc<Mutex<CaptureState>>) {
 
 fn run_session(
     device_path: &str,
-    shared: &Arc<Mutex<CaptureState>>,
+    shared: &watch::Sender<CaptureState>,
     lut: &[[u8; 4]],
 ) -> io::Result<()> {
     let dev = Device::with_path(device_path)?;
@@ -83,7 +82,7 @@ fn run_session(
     loop {
         let (buf, _meta) = stream.next()?;
         if let Some(frame) = decode_frame(buf, &fmt, lut) {
-            *shared.lock().unwrap() = CaptureState::Frame(frame);
+            let _ = shared.send(CaptureState::Frame(frame));
         }
     }
 }
