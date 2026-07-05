@@ -19,7 +19,7 @@ pub struct RenderedFrame {
 
 /// Maps `temps` (row-major, `width` x `height`) through `lut` after
 /// auto-scaling to the frame's own min/max, and encodes the result as PNG.
-pub fn build_frame(width: u32, height: u32, temps: &[f32], lut: &[[u8; 4]]) -> RenderedFrame {
+pub fn build_frame(width: u32, height: u32, temps: &[f32], color_lut: &[[u8; 4]]) -> RenderedFrame {
     let mut min_temp = f32::MAX;
     let mut max_temp = f32::MIN;
     let mut min_pos = (0u32, 0u32);
@@ -39,12 +39,13 @@ pub fn build_frame(width: u32, height: u32, temps: &[f32], lut: &[[u8; 4]]) -> R
     }
 
     // Auto-scale: the color range always spans exactly this frame's min/max.
+    //TODO
     let range = (max_temp - min_temp).max(0.1);
 
     let mut rgba = vec![0u8; (width * height * 4) as usize];
     for (i, &t) in temps.iter().enumerate() {
         let n = (((t - min_temp) / range) * 255.0).clamp(0.0, 255.0) as usize;
-        rgba[i * 4..i * 4 + 4].copy_from_slice(&lut[n]);
+        rgba[i * 4..i * 4 + 4].copy_from_slice(&color_lut[n]);
     }
 
     // Encode as data URI for embedding in HTML.

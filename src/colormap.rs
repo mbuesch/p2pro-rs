@@ -21,28 +21,28 @@ fn lerp_u8(a: u8, b: u8, t: f32) -> u8 {
 
 /// Builds a 256-entry RGBA lookup table spanning the palette, so that
 /// mapping a normalized temperature (0..=255) to a color is a plain index.
-pub fn build_lut() -> Vec<[u8; 4]> {
-    (0..256u32)
-        .map(|i| {
-            let t = i as f32 / 255.0;
-            let mut color = STOPS[STOPS.len() - 1].1;
-            for pair in STOPS.windows(2) {
-                let (t0, c0) = pair[0];
-                let (t1, c1) = pair[1];
-                if t <= t1 {
-                    let seg = if t1 > t0 { (t - t0) / (t1 - t0) } else { 0.0 };
-                    let seg = seg.clamp(0.0, 1.0);
-                    color = [
-                        lerp_u8(c0[0], c1[0], seg),
-                        lerp_u8(c0[1], c1[1], seg),
-                        lerp_u8(c0[2], c1[2], seg),
-                    ];
-                    break;
-                }
+pub fn build_color_lut() -> [[u8; 4]; 256] {
+    let mut lut = [[0u8; 4]; 256];
+    for (i, entry) in lut.iter_mut().enumerate() {
+        let t = i as f32 / 255.0;
+        let mut color = STOPS[STOPS.len() - 1].1;
+        for pair in STOPS.windows(2) {
+            let (t0, c0) = pair[0];
+            let (t1, c1) = pair[1];
+            if t <= t1 {
+                let seg = if t1 > t0 { (t - t0) / (t1 - t0) } else { 0.0 };
+                let seg = seg.clamp(0.0, 1.0);
+                color = [
+                    lerp_u8(c0[0], c1[0], seg),
+                    lerp_u8(c0[1], c1[1], seg),
+                    lerp_u8(c0[2], c1[2], seg),
+                ];
+                break;
             }
-            [color[0], color[1], color[2], 255]
-        })
-        .collect()
+        }
+        *entry = [color[0], color[1], color[2], 255];
+    }
+    lut
 }
 
 /// Renders the same palette as a CSS `linear-gradient`, hottest color on
