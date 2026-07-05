@@ -5,11 +5,11 @@ edition = "2024"
 rust-version = "1.91"
 license = "MIT"
 authors = [ "Michael Büsch <m@bues.ch>" ]
-#homepage = "https://bues.ch/"
-#repository = "https://github.com/mbuesch/"
+homepage = "https://bues.ch/"
+repository = "https://github.com/mbuesch/p2pro-rs"
 readme = "README.md"
-#categories = [ ]
-#keywords = [ ]
+categories = [ "graphics", "hardware-support", "science" ]
+keywords = [ "infiray", "p2pro", "thermal", "camera" ]
 
 [dependencies]
 base64 = "0.22"
