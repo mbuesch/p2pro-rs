@@ -5,7 +5,7 @@
 //! is the raw thermal data, where every 2 bytes that would normally be a
 //! YUYV luma/chroma pair are instead a little-endian 16-bit raw sample.
 
-use crate::render;
+use crate::render::Renderer;
 use std::{io, time::Duration};
 use tokio::sync::watch;
 use v4l::{
@@ -44,7 +44,7 @@ pub struct ThermalFrame {
 pub struct Camera {
     device_path: String,
     to_ui: watch::Sender<CaptureState>,
-    color_lut: [[u8; 4]; 256],
+    renderer: Renderer,
 }
 
 impl Camera {
@@ -64,11 +64,10 @@ impl Camera {
     }
 
     fn new(device_path: String, to_ui: watch::Sender<CaptureState>) -> Self {
-        let color_lut = crate::colormap::build_color_lut();
         Self {
             device_path,
             to_ui,
-            color_lut,
+            renderer: Renderer::new(),
         }
     }
 
@@ -119,7 +118,7 @@ impl Camera {
             }
         }
 
-        let rendered = render::build_frame(WIDTH, HEIGHT, &temps, &self.color_lut);
+        let rendered = self.renderer.build_frame(WIDTH, HEIGHT, &temps);
         Some(ThermalFrame {
             data_uri: rendered.data_uri,
             width: WIDTH,
