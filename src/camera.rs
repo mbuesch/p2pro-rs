@@ -103,7 +103,10 @@ impl Camera {
         let half_height = HEIGHT as usize;
         let width = WIDTH as usize;
 
-        if buf.len() < stride * fmt.height as usize {
+        let buf_len = buf.len();
+        let min_buf_len = stride * fmt.height as usize;
+        if buf_len < min_buf_len {
+            eprintln!("Camera buffer too short: {buf_len} bytes (expected at least {min_buf_len})");
             return None;
         }
 
