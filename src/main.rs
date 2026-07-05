@@ -1,5 +1,6 @@
 use crate::camera::Camera;
 use clap::Parser;
+use dioxus::desktop::{Config, WindowBuilder};
 use std::sync::Arc;
 use tokio::{
     sync::{Mutex as AsyncMutex, mpsc},
@@ -10,6 +11,14 @@ mod app;
 mod camera;
 mod colormap;
 mod render;
+
+fn load_window_icon() -> Option<dioxus::desktop::tao::window::Icon> {
+    let bytes = include_bytes!("../assets/icon-64x64.png");
+    let image = image::load_from_memory(bytes).ok()?;
+    let rgba = image.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    dioxus::desktop::tao::window::Icon::from_rgba(rgba.into_raw(), width, height).ok()
+}
 
 #[derive(Parser)]
 struct Args {
@@ -28,12 +37,17 @@ async fn main() {
         async move { Camera::capture_loop(device_path, tx).await }
     });
 
+    let window = WindowBuilder::new()
+        .with_always_on_top(false)
+        .with_title("InfiRay P2Pro")
+        .with_window_icon(load_window_icon());
+    let config = Config::new().with_window(window).with_menu(None);
     let builder = dioxus::LaunchBuilder::desktop();
 
     tokio::task::unconstrained({
         let rx = Arc::new(AsyncMutex::new(rx));
         async move {
-            builder.with_context(rx).launch(app::App);
+            builder.with_cfg(config).with_context(rx).launch(app::App);
         }
     })
     .await;
