@@ -1,4 +1,4 @@
-use crate::camera::CaptureState;
+use crate::camera::{Camera, CaptureState};
 use clap::Parser;
 use tokio::sync::watch;
 
@@ -18,7 +18,7 @@ fn main() {
 
     let (tx, rx) = watch::channel(CaptureState::Connecting);
 
-    std::thread::spawn(move || camera::capture_loop(device_path, tx));
+    std::thread::spawn(move || Camera::capture_loop(device_path, tx));
 
     dioxus::LaunchBuilder::new()
         .with_context(rx)

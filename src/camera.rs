@@ -41,28 +41,28 @@ pub struct ThermalFrame {
     pub max_pos: (u32, u32),
 }
 
-/// Runs forever on a dedicated OS thread: (re)connects to the camera and
-/// streams frames into `to_ui`, retrying every couple seconds on error
-/// (e.g. camera unplugged or not found yet).
-pub fn capture_loop(device_path: String, to_ui: watch::Sender<CaptureState>) {
-    let camera = Camera::new(device_path.clone(), to_ui.clone());
-    loop {
-        if let Err(e) = camera.run_session() {
-            let _ = to_ui.send(CaptureState::Error(format!(
-                "{device_path}: {e} (retrying...)"
-            )));
-        }
-        std::thread::sleep(Duration::from_secs(1));
-    }
-}
-
-struct Camera {
+pub struct Camera {
     device_path: String,
     to_ui: watch::Sender<CaptureState>,
     color_lut: [[u8; 4]; 256],
 }
 
 impl Camera {
+    /// Runs forever on a dedicated OS thread: (re)connects to the camera and
+    /// streams frames into `to_ui`, retrying every couple seconds on error
+    /// (e.g. camera unplugged or not found yet).
+    pub fn capture_loop(device_path: String, to_ui: watch::Sender<CaptureState>) {
+        let camera = Camera::new(device_path.clone(), to_ui.clone());
+        loop {
+            if let Err(e) = camera.run_session() {
+                let _ = to_ui.send(CaptureState::Error(format!(
+                    "{device_path}: {e} (retrying...)"
+                )));
+            }
+            std::thread::sleep(Duration::from_secs(1));
+        }
+    }
+
     fn new(device_path: String, to_ui: watch::Sender<CaptureState>) -> Self {
         let color_lut = crate::colormap::build_color_lut();
         Self {
