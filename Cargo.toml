@@ -26,6 +26,6 @@ debug = "limited"
 panic = "abort"
 
 [profile.release]
-lto = "fat"
+lto = "thin"
 panic = "abort"
 strip = "symbols"
