@@ -11,17 +11,22 @@ Features:
 - Automatic scaling: the color range always stretches to the current frame's
   min/max temperature.
 
-## How it talks to the camera
-
-The P2Pro shows up as a standard UVC webcam.
-This app opens it directly via Video4Linux2 (the `v4l` crate) and requests raw `YUYV` frames at 256x384.
-The top half of that buffer is a normal 8-bit preview (ignored here) and the bottom half is actually raw 16-bit temperature samples packed into what looks like YUYV bytes.
-
 ## Operating System Support
 
-Currently this app only works on Linux.
+- **Linux**
+- **Android**
 
-## Running
+## How it talks to the camera
+
+The P2Pro shows up as a standard UVC webcam and requests raw `YUYV` frames at 256x384.
+The top half of that buffer is a normal 8-bit preview (ignored here) and the bottom half is actually raw 16-bit temperature samples packed into what looks like YUYV bytes.
+
+How that YUYV stream is obtained depends on the platform:
+
+- **Linux desktop**: opened directly via Video4Linux2.
+- **Android**: Android does not expose a V4L2. Instead, the app drives the P2Pro's USB Video Class protocol itself over `libusb` (the `rusb` crate).
+
+## Running on Linux
 
 First install [Rust](https://www.rust-lang.org/tools/install) and then build the app with cargo:
 
@@ -45,6 +50,17 @@ If you want to specify a particular device, you can pass it as the first argumen
 
 There is no need to install the app.
 You can just copy the `p2pro-rs` binary to a convenient location and run it from there.
+
+## Running on Android
+
+Building for Android requires the Android SDK/NDK and the [Dioxus CLI](https://dioxuslabs.com/learn/0.7/getting_started/#android) (`dx`); see the Dioxus mobile setup guide for installing those.
+
+Build and install the APK on a connected device:
+
+```sh
+./android-build.sh
+./android-install.sh
+```
 
 ## License
 

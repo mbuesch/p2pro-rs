@@ -1,0 +1,11 @@
+[application]
+name = "P2Pro"
+android_main_activity = "android/MainActivity.kt"
+android_manifest = "android/AndroidManifest.xml"
+
+[bundle]
+identifier = "ch.bues.p2pro"
+publisher = "Michael Büsch"
+
+[android]
+features = ["android.hardware.usb.host"]

@@ -25,7 +25,12 @@ h1 {
 }
 
 .status.info {
-    color: #3b82ff;
+    color: #9ecbff;
+    font-family: ui-monospace, "Cascadia Mono", Menlo, monospace;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .status.error {
