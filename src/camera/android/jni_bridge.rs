@@ -1,8 +1,11 @@
 use jni::{
-    JNIEnv,
+    JNIEnv, JavaVM,
     objects::{JObject, JString},
 };
-use std::{os::fd::RawFd, sync::LazyLock};
+use std::{
+    os::fd::RawFd,
+    sync::{LazyLock, OnceLock},
+};
 use tokio::sync::{Mutex as AsyncMutex, mpsc};
 
 /// An event handed over from the Android `MainActivity`.
@@ -27,6 +30,52 @@ static EVENT_CHANNEL: LazyLock<EventChannel> = LazyLock::new(|| {
     }
 });
 
+static JVM: OnceLock<JavaVM> = OnceLock::new();
+
+/// Guard that notifies the Kotlin side when the native USB session ends.
+pub struct SessionGuard(());
+
+impl SessionGuard {
+    pub fn new() -> Self {
+        Self(())
+    }
+}
+
+impl Drop for SessionGuard {
+    fn drop(&mut self) {
+        notify_session_ended();
+    }
+}
+
+/// Notifies the Kotlin `MainActivity` that the native USB session has ended
+/// and that it is now safe to close the `UsbDeviceConnection`.
+fn notify_session_ended() {
+    let jvm = match JVM.get() {
+        Some(jvm) => jvm,
+        None => {
+            log::error!("notify_session_ended: JVM not initialized");
+            return;
+        }
+    };
+    let mut env = match jvm.attach_current_thread() {
+        Ok(env) => env,
+        Err(e) => {
+            log::error!("notify_session_ended: failed to attach to JVM: {e}");
+            return;
+        }
+    };
+    let cls = match env.find_class("dev/dioxus/main/MainActivity") {
+        Ok(cls) => cls,
+        Err(e) => {
+            log::error!("notify_session_ended: find_class failed: {e}");
+            return;
+        }
+    };
+    if let Err(e) = env.call_static_method(&cls, "onNativeUsbSessionEnded", "()V", &[]) {
+        log::error!("notify_session_ended: call_static_method failed: {e}");
+    }
+}
+
 pub async fn next_event() -> UsbEvent {
     EVENT_CHANNEL
         .rx
@@ -45,12 +94,15 @@ pub async fn next_event() -> UsbEvent {
 /// on `dev.dioxus.main.MainActivity`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_dioxus_main_MainActivity_nativeUsbDeviceReady<'local>(
-    _env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     _this: JObject<'local>,
     fd: i32,
     vendor_id: i32,
     product_id: i32,
 ) {
+    if let Ok(jvm) = env.get_java_vm() {
+        let _ = JVM.set(jvm);
+    }
     let _ = EVENT_CHANNEL.tx.send(UsbEvent::DeviceReady(
         fd as RawFd,
         vendor_id as u16,
@@ -69,6 +121,9 @@ pub extern "system" fn Java_dev_dioxus_main_MainActivity_nativeUsbLog<'local>(
     _this: JObject<'local>,
     msg: JString<'local>,
 ) {
+    if let Ok(jvm) = env.get_java_vm() {
+        let _ = JVM.set(jvm);
+    }
     if let Ok(java_str) = env.get_string(&msg) {
         let _ = EVENT_CHANNEL.tx.send(UsbEvent::Log(java_str.into()));
     }

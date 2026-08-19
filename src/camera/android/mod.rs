@@ -9,7 +9,7 @@ mod stream;
 
 use super::CaptureState;
 use anyhow::{self as ah, Context as _};
-use jni_bridge::UsbEvent;
+use jni_bridge::{SessionGuard, UsbEvent};
 use rusb::UsbContext;
 use std::{collections::VecDeque, os::fd::RawFd, time::Duration};
 use tokio::sync::mpsc;
@@ -108,12 +108,16 @@ async fn run_session(fd: RawFd, to_ui: mpsc::Sender<CaptureState>) -> ah::Result
 
 /// USB Video Class session (negotiation + streaming).
 fn run_session_blocking(fd: RawFd, to_ui: mpsc::Sender<CaptureState>) -> ah::Result<()> {
+    // Tell the Kotlin side when this session is done so it can safely close
+    // the USB file descriptor.
+    let _session_guard = SessionGuard::new();
+
     let context = rusb::Context::new().context("Failed to create a libusb context")?;
 
     // SAFETY: `fd` is a USB device file descriptor already opened (and
     // permission-checked) by the Android side via `UsbManager.openDevice()`.
-    // It stays open for as long as this session runs; the Kotlin side does
-    // not close it while the app is running.
+    // The Kotlin side keeps the `UsbDeviceConnection` alive until this
+    // session reports that it has ended (see `notify_session_ended`).
     let handle = unsafe { context.open_device_with_fd(fd) }
         .context("Failed to wrap the Android USB file descriptor")?;
     let _ = to_ui.blocking_send(CaptureState::Info(

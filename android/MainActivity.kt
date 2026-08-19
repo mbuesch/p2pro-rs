@@ -15,6 +15,8 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import java.lang.ref.WeakReference
+import kotlin.jvm.JvmStatic
 
 typealias BuildConfig = ch.bues.p2pro.BuildConfig
 
@@ -27,6 +29,8 @@ class MainActivity : WryActivity() {
     private var openDeviceName: String? = null
     private var permissionRequestedFor: String? = null
     private var pendingAfterCameraPermission: UsbDevice? = null
+    private var nativeSessionActive: Boolean = false
+    private var pendingDetach: Boolean = false
 
     private val cameraPermissionLauncher: ActivityResultLauncher<String> =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -71,10 +75,13 @@ class MainActivity : WryActivity() {
                     val device = usbDeviceExtra(intent) ?: return
                     logUsb("USB detached: ${describe(device)}")
                     if (device.deviceName == openDeviceName) {
-                        // The native session notices the dead fd by itself and goes back to the waiting state.
-                        openDeviceName = null
-                        openConnection = null
-                        permissionRequestedFor = null
+                        if (nativeSessionActive) {
+                            logUsb("Native session still running; holding fd open until it ends")
+                            pendingDetach = true
+                        } else {
+                            logUsb("No native session active; closing connection now")
+                            closeOpenConnection()
+                        }
                     }
                 }
             }
@@ -83,6 +90,7 @@ class MainActivity : WryActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        currentActivity = WeakReference(this)
         logUsb("MainActivity onCreate (custom USB build, SDK ${Build.VERSION.SDK_INT})")
         val filter = IntentFilter().apply {
             addAction(ACTION_USB_PERMISSION)
@@ -109,6 +117,8 @@ class MainActivity : WryActivity() {
     }
 
     override fun onDestroy() {
+        currentActivity?.clear()
+        currentActivity = null
         unregisterReceiver(usbReceiver)
         super.onDestroy()
     }
@@ -188,6 +198,10 @@ class MainActivity : WryActivity() {
     }
 
     private fun openDevice(device: UsbDevice) {
+        if (openConnection != null) {
+            logUsb("openDevice(${device.deviceName}) called while a connection already exists; ignoring")
+            return
+        }
         val connection = try {
             usbManager.openDevice(device)
         } catch (e: Exception) {
@@ -200,9 +214,20 @@ class MainActivity : WryActivity() {
         }
         openConnection = connection
         openDeviceName = device.deviceName
+        nativeSessionActive = true
+        pendingDetach = false
         val fd = connection.fileDescriptor
         logUsb("Opened ${device.deviceName}: fd=$fd, handing it to the native side")
         nativeUsbDeviceReady(fd, device.vendorId, device.productId)
+    }
+
+    private fun closeOpenConnection() {
+        openConnection?.close()
+        openConnection = null
+        openDeviceName = null
+        nativeSessionActive = false
+        pendingDetach = false
+        permissionRequestedFor = null
     }
 
     private fun describe(device: UsbDevice): String {
@@ -236,5 +261,21 @@ class MainActivity : WryActivity() {
         const val ACTION_USB_PERMISSION = "dev.dioxus.main.USB_PERMISSION"
         const val P2PRO_VENDOR_ID = 0x0bda
         const val P2PRO_PRODUCT_ID = 0x5830
+
+        private var currentActivity: WeakReference<MainActivity>? = null
+
+        /** Called from Rust once the native USB session has ended. */
+        @JvmStatic
+        private fun onNativeUsbSessionEnded() {
+            currentActivity?.get()?.let { activity ->
+                activity.runOnUiThread {
+                    activity.logUsb("Native USB session ended")
+                    if (activity.pendingDetach) {
+                        activity.logUsb("Processing pending detach: closing USB connection")
+                    }
+                    activity.closeOpenConnection()
+                }
+            }
+        }
     }
 }
