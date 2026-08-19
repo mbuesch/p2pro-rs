@@ -1,2 +1,8 @@
-/target
+*.aab
+*.apk
+*.idsig
+*.jks
 /.mcp.json
+/.vscode/
+/android-sign-release.sh
+/target
