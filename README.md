@@ -13,8 +13,8 @@ Features:
 
 ## Operating System Support
 
-- **Linux**
-- **Android**
+- **Linux**: Stable.
+- **Android**: Does work - with minor glitches.
 
 ## How it talks to the camera
 
@@ -53,12 +53,34 @@ You can just copy the `p2pro-rs` binary to a convenient location and run it from
 
 ## Running on Android
 
-Building for Android requires the Android SDK/NDK and the [Dioxus CLI](https://dioxuslabs.com/learn/0.7/getting_started/#android) (`dx`); see the Dioxus mobile setup guide for installing those.
+First install [Rust](https://www.rust-lang.org/tools/install).
 
-Build and install the APK on a connected device:
+Before running the Android build script, ensure you have the Android NDK and SDK installed and properly configured.
+The easiest way to get them is to install [Android Studio](https://developer.android.com/studio), which includes both.
+For the build script to work, you need to set the some environment variables to point to your Android NDK and SDK installations.
+
+```sh
+# Set this to the path of your Android SDK installation.
+export ANDROID_HOME="$HOME/Android/Sdk"
+
+# Set this to the path of your Android NDK installation.
+# Adjust the VERSION part to match the installed NDK version.
+export ANDROID_NDK_HOME="$HOME/Android/Sdk/ndk/VERSION"
+
+# Add Android SDK platform-tools to PATH for ADB access.
+export PATH="$HOME/Android/Sdk/platform-tools/:$PATH"
+```
+
+Use the provided script to build the Android packages:
 
 ```sh
 ./android-build.sh
+```
+
+Install the generated APK on your Android device (via ADB).
+Plug in your Android device, ensure Developer Mode, USB debugging and Sideloading are enabled, and run:
+
+```sh
 ./android-install.sh
 ```
 
