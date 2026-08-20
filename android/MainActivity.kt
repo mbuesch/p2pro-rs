@@ -91,7 +91,6 @@ class MainActivity : WryActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         currentActivity = WeakReference(this)
-        logUsb("MainActivity onCreate (custom USB build, SDK ${Build.VERSION.SDK_INT})")
         val filter = IntentFilter().apply {
             addAction(ACTION_USB_PERMISSION)
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
