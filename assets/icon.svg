@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="64 64 384 384">
+  <defs>
+    <!-- Ironbow-style thermal gradient -->
+    <linearGradient id="ironbow" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%"  stop-color="#000000"/>
+      <stop offset="20%" stop-color="#3b0f70"/>
+      <stop offset="40%" stop-color="#8c2981"/>
+      <stop offset="60%" stop-color="#de4968"/>
+      <stop offset="80%" stop-color="#fe9f6d"/>
+      <stop offset="100%" stop-color="#fcfdbf"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Camera body -->
+  <rect x="94" y="174" width="324" height="212" rx="28" fill="#e8e8ec"/>
+  <rect x="94" y="174" width="324" height="212" rx="28" fill="none" stroke="#050508" stroke-width="4"/>
+
+  <!-- Viewfinder bump -->
+  <rect x="196" y="138" width="120" height="50" rx="14" fill="#e8e8ec"/>
+  <rect x="196" y="138" width="120" height="50" rx="14" fill="none" stroke="#050508" stroke-width="4"/>
+
+  <!-- Lens outer ring -->
+  <circle cx="256" cy="280" r="94" fill="#c7c7ce"/>
+  <circle cx="256" cy="280" r="94" fill="none" stroke="#050508" stroke-width="4"/>
+
+  <!-- Lens: thermal ironbow disc -->
+  <circle cx="256" cy="280" r="76" fill="url(#ironbow)"/>
+  <circle cx="256" cy="280" r="76" fill="none" stroke="#050508" stroke-width="4"/>
+
+  <!-- Crosshair marker -->
+  <g stroke="#ffffff" stroke-width="5" stroke-linecap="round">
+    <line x1="256" y1="248" x2="256" y2="262"/>
+    <line x1="256" y1="298" x2="256" y2="312"/>
+    <line x1="224" y1="280" x2="238" y2="280"/>
+    <line x1="274" y1="280" x2="288" y2="280"/>
+  </g>
+  <circle cx="256" cy="280" r="4" fill="#ffffff"/>
+
+  <!-- Small shutter/status dot -->
+  <circle cx="368" cy="204" r="10" fill="#e8e8ec"/>
+  <circle cx="368" cy="204" r="10" fill="none" stroke="#050508" stroke-width="3"/>
+</svg>
