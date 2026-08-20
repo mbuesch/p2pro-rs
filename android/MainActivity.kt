@@ -29,8 +29,8 @@ class MainActivity : WryActivity() {
     private var openDeviceName: String? = null
     private var permissionRequestedFor: String? = null
     private var pendingAfterCameraPermission: UsbDevice? = null
-    private var nativeSessionActive: Boolean = false
-    private var pendingDetach: Boolean = false
+    private var pendingOpenDevice: UsbDevice? = null
+    private var sessionToken: Long = 0L
 
     private val cameraPermissionLauncher: ActivityResultLauncher<String> =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -75,13 +75,9 @@ class MainActivity : WryActivity() {
                     val device = usbDeviceExtra(intent) ?: return
                     logUsb("USB detached: ${describe(device)}")
                     if (device.deviceName == openDeviceName) {
-                        if (nativeSessionActive) {
-                            logUsb("Native session still running; holding fd open until it ends")
-                            pendingDetach = true
-                        } else {
-                            logUsb("No native session active; closing connection now")
-                            closeOpenConnection()
-                        }
+                        logUsb("Closing USB connection for detached device")
+                        closeOpenConnection()
+                        retryPendingOpenDevice()
                     }
                 }
             }
@@ -158,7 +154,7 @@ class MainActivity : WryActivity() {
             return
         }
         when {
-            openDeviceName == device.deviceName ->
+            openDeviceName == device.deviceName && openConnection != null ->
                 logUsb("P2Pro ${device.deviceName} is already open; ignoring")
             usbManager.hasPermission(device) -> {
                 logUsb("P2Pro found and permission already granted")
@@ -198,7 +194,8 @@ class MainActivity : WryActivity() {
 
     private fun openDevice(device: UsbDevice) {
         if (openConnection != null) {
-            logUsb("openDevice(${device.deviceName}) called while a connection already exists; ignoring")
+            logUsb("openDevice(${device.deviceName}) called while a previous session is still closing; will retry once it ends")
+            pendingOpenDevice = device
             return
         }
         val connection = try {
@@ -211,22 +208,33 @@ class MainActivity : WryActivity() {
             logUsb("openDevice(${device.deviceName}) returned null")
             return
         }
+        pendingOpenDevice = null
         openConnection = connection
         openDeviceName = device.deviceName
-        nativeSessionActive = true
-        pendingDetach = false
+        sessionToken += 1
+        val token = sessionToken
         val fd = connection.fileDescriptor
         logUsb("Opened ${device.deviceName}: fd=$fd, handing it to the native side")
-        nativeUsbDeviceReady(fd, device.vendorId, device.productId)
+        nativeUsbDeviceReady(fd, device.vendorId, device.productId, token)
     }
 
     private fun closeOpenConnection() {
         openConnection?.close()
         openConnection = null
         openDeviceName = null
-        nativeSessionActive = false
-        pendingDetach = false
         permissionRequestedFor = null
+    }
+
+    /** Retries a device whose open was deferred while the previous session was closing. */
+    private fun retryPendingOpenDevice() {
+        val pending = pendingOpenDevice ?: return
+        pendingOpenDevice = null
+        if (usbManager.deviceList.values.any { it.deviceName == pending.deviceName }) {
+            logUsb("Retrying ${pending.deviceName} now that the previous session ended")
+            handleDevice(pending)
+        } else {
+            logUsb("Pending device ${pending.deviceName} is no longer attached; not reopening")
+        }
     }
 
     private fun describe(device: UsbDevice): String {
@@ -250,7 +258,7 @@ class MainActivity : WryActivity() {
     }
 
     /** Implemented in Rust, see src/camera/android/jni_bridge.rs. */
-    private external fun nativeUsbDeviceReady(fd: Int, vendorId: Int, productId: Int)
+    private external fun nativeUsbDeviceReady(fd: Int, vendorId: Int, productId: Int, token: Long)
 
     /** Implemented in Rust, see src/camera/android/jni_bridge.rs. */
     private external fun nativeUsbLog(msg: String)
@@ -265,14 +273,16 @@ class MainActivity : WryActivity() {
 
         /** Called from Rust once the native USB session has ended. */
         @JvmStatic
-        fun onNativeUsbSessionEnded() {
+        fun onNativeUsbSessionEnded(token: Long) {
             currentActivity?.get()?.let { activity ->
                 activity.runOnUiThread {
-                    activity.logUsb("Native USB session ended")
-                    if (activity.pendingDetach) {
-                        activity.logUsb("Processing pending detach: closing USB connection")
+                    if (activity.sessionToken != token) {
+                        activity.logUsb("Native USB session ended (stale token $token, current ${activity.sessionToken}); ignoring")
+                        return@runOnUiThread
                     }
+                    activity.logUsb("Native USB session ended")
                     activity.closeOpenConnection()
+                    activity.retryPendingOpenDevice()
                 }
             }
         }

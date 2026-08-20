@@ -1,6 +1,6 @@
 use jni::{
     JNIEnv, JavaVM,
-    objects::{GlobalRef, JObject, JString},
+    objects::{GlobalRef, JObject, JString, JValue},
 };
 use std::{
     os::fd::RawFd,
@@ -11,8 +11,8 @@ use tokio::sync::{Mutex as AsyncMutex, mpsc};
 /// An event handed over from the Android `MainActivity`.
 pub enum UsbEvent {
     /// `UsbManager.openDevice()` succeeded.
-    /// Carries `(fd, vendor_id, product_id)` of an opened, permission-granted USB device.
-    DeviceReady(RawFd, u16, u16),
+    /// Carries `(fd, vendor_id, product_id, session_token)` of an opened, permission-granted USB device.
+    DeviceReady(RawFd, u16, u16, i64),
     /// A human-readable log to be shown on screen.
     Log(String),
 }
@@ -34,17 +34,17 @@ static JVM: OnceLock<JavaVM> = OnceLock::new();
 static MAIN_ACTIVITY_CLASS: OnceLock<GlobalRef> = OnceLock::new();
 
 /// Guard that notifies the Kotlin side when the native USB session ends.
-pub struct SessionGuard(());
+pub struct SessionGuard(i64);
 
 impl SessionGuard {
-    pub fn new() -> Self {
-        Self(())
+    pub fn new(session_token: i64) -> Self {
+        Self(session_token)
     }
 }
 
 impl Drop for SessionGuard {
     fn drop(&mut self) {
-        notify_session_ended();
+        notify_session_ended(self.0);
     }
 }
 
@@ -76,9 +76,8 @@ fn cache_main_activity_class(env: &mut JNIEnv<'_>) {
     }
 }
 
-/// Notifies the Kotlin `MainActivity` that the native USB session has ended
-/// and that it is now safe to close the `UsbDeviceConnection`.
-fn notify_session_ended() {
+/// Notifies the Kotlin `MainActivity` that the native USB session has ended.
+fn notify_session_ended(session_token: i64) {
     let jvm = match JVM.get() {
         Some(jvm) => jvm,
         None => {
@@ -100,7 +99,8 @@ fn notify_session_ended() {
             return;
         }
     };
-    if let Err(e) = env.call_static_method(cls, "onNativeUsbSessionEnded", "()V", &[]) {
+    let args = [JValue::Long(session_token)];
+    if let Err(e) = env.call_static_method(cls, "onNativeUsbSessionEnded", "(J)V", &args) {
         log::error!("notify_session_ended: call_static_method failed: {e}");
         clear_pending_exception(&mut env);
     }
@@ -120,7 +120,7 @@ pub async fn next_event() -> UsbEvent {
 /// granted USB permission for the P2Pro and `UsbManager.openDevice()` has
 /// handed back a file descriptor for it.
 ///
-/// Java signature: `private external fun nativeUsbDeviceReady(fd: Int, vendorId: Int, productId: Int)`
+/// Java signature: `private external fun nativeUsbDeviceReady(fd: Int, vendorId: Int, productId: Int, token: Long)`
 /// on `dev.dioxus.main.MainActivity`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_dioxus_main_MainActivity_nativeUsbDeviceReady<'local>(
@@ -129,6 +129,7 @@ pub extern "system" fn Java_dev_dioxus_main_MainActivity_nativeUsbDeviceReady<'l
     fd: i32,
     vendor_id: i32,
     product_id: i32,
+    token: i64,
 ) {
     cache_main_activity_class(&mut env);
     if let Ok(jvm) = env.get_java_vm() {
@@ -138,6 +139,7 @@ pub extern "system" fn Java_dev_dioxus_main_MainActivity_nativeUsbDeviceReady<'l
         fd as RawFd,
         vendor_id as u16,
         product_id as u16,
+        token,
     ));
 }
 

@@ -34,10 +34,12 @@ impl DebugLog {
     }
 
     fn push(&mut self, line: impl Into<String>) {
+        let line = line.into();
+        eprintln!("P2Pro: {}", line);
         if self.lines.len() >= Self::MAX_LINES {
             self.lines.pop_front();
         }
-        self.lines.push_back(line.into());
+        self.lines.push_back(line);
     }
 
     fn render(&self) -> String {
@@ -72,7 +74,7 @@ pub async fn capture_loop(to_ui: mpsc::Sender<CaptureState>) {
                 log::info!("Kotlin: {line}");
                 log.push(line);
             }
-            UsbEvent::DeviceReady(fd, vendor_id, product_id) => {
+            UsbEvent::DeviceReady(fd, vendor_id, product_id, token) => {
                 log.push(format!(
                     "Rust: received fd {fd} for {vendor_id:04x}:{product_id:04x}"
                 ));
@@ -83,7 +85,7 @@ pub async fn capture_loop(to_ui: mpsc::Sender<CaptureState>) {
                     continue;
                 }
                 let _ = to_ui.send(CaptureState::Info(waiting_message(&log))).await;
-                if let Err(e) = run_session(fd, to_ui.clone()).await {
+                if let Err(e) = run_session(fd, token, to_ui.clone()).await {
                     log::error!("P2Pro USB session failed: {e:#}");
                     log.push(format!("Session error: {e:#}"));
                     let _ = to_ui
@@ -99,25 +101,20 @@ pub async fn capture_loop(to_ui: mpsc::Sender<CaptureState>) {
     }
 }
 
-async fn run_session(fd: RawFd, to_ui: mpsc::Sender<CaptureState>) -> ah::Result<()> {
-    match tokio::task::spawn_blocking(move || run_session_blocking(fd, to_ui)).await {
+async fn run_session(fd: RawFd, token: i64, to_ui: mpsc::Sender<CaptureState>) -> ah::Result<()> {
+    match tokio::task::spawn_blocking(move || run_session_blocking(fd, token, to_ui)).await {
         Ok(result) => result,
         Err(join_err) => Err(ah::Error::new(join_err).context("USB capture thread panicked")),
     }
 }
 
 /// USB Video Class session (negotiation + streaming).
-fn run_session_blocking(fd: RawFd, to_ui: mpsc::Sender<CaptureState>) -> ah::Result<()> {
-    // Tell the Kotlin side when this session is done so it can safely close
-    // the USB file descriptor.
-    let _session_guard = SessionGuard::new();
+fn run_session_blocking(fd: RawFd, token: i64, to_ui: mpsc::Sender<CaptureState>) -> ah::Result<()> {
+    let _session_guard = SessionGuard::new(token);
 
     let context = rusb::Context::new().context("Failed to create a libusb context")?;
 
-    // SAFETY: `fd` is a USB device file descriptor already opened (and
-    // permission-checked) by the Android side via `UsbManager.openDevice()`.
-    // The Kotlin side keeps the `UsbDeviceConnection` alive until this
-    // session reports that it has ended (see `notify_session_ended`).
+    // SAFETY: `fd` is a USB device file descriptor already opened.
     let handle = unsafe { context.open_device_with_fd(fd) }
         .context("Failed to wrap the Android USB file descriptor")?;
     let _ = to_ui.blocking_send(CaptureState::Info(
