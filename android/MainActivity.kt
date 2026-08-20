@@ -265,7 +265,7 @@ class MainActivity : WryActivity() {
 
         /** Called from Rust once the native USB session has ended. */
         @JvmStatic
-        private fun onNativeUsbSessionEnded() {
+        fun onNativeUsbSessionEnded() {
             currentActivity?.get()?.let { activity ->
                 activity.runOnUiThread {
                     activity.logUsb("Native USB session ended")

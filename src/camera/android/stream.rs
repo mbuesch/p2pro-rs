@@ -128,6 +128,7 @@ struct IsoUserData {
     collector: *mut Collector,
     stopping: bool,
     outstanding: usize,
+    device_gone: bool,
 }
 
 /// Returns a pointer to the iso packet descriptor array that trails the
@@ -162,6 +163,7 @@ fn run_iso(
         collector: collector as *mut Collector,
         stopping: false,
         outstanding: 0,
+        device_gone: false,
     }));
 
     // Buffers must stay at a stable address for as long as their transfer is
@@ -234,6 +236,11 @@ fn run_iso(
             if rc != 0 {
                 return Err(err!("libusb_handle_events() failed: {rc}"));
             }
+            // SAFETY: only the callbacks (run from within the call above,
+            // on this thread) ever write `device_gone`.
+            if unsafe { (*user_data).device_gone } {
+                return Err(err!("P2Pro USB device was disconnected"));
+            }
         }
     })();
 
@@ -297,8 +304,9 @@ extern "system" fn iso_callback(transfer: *mut ffi::libusb_transfer) {
 /// points at a live `IsoUserData`.
 unsafe fn handle_iso_completion(transfer: *mut ffi::libusb_transfer) {
     let user_data = unsafe { &mut *((*transfer).user_data as *mut IsoUserData) };
+    let no_device = unsafe { (*transfer).status } == ffi::constants::LIBUSB_TRANSFER_NO_DEVICE;
 
-    if !user_data.stopping {
+    if !user_data.stopping && !no_device {
         let collector = user_data.collector;
         // Do not let panics propagate into our C caller.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -315,11 +323,16 @@ unsafe fn handle_iso_completion(transfer: *mut ffi::libusb_transfer) {
         user_data.outstanding -= 1;
         // SAFETY: the transfer completed and is no longer used by libusb.
         unsafe { ffi::libusb_free_transfer(transfer) };
-    } else if unsafe { ffi::libusb_submit_transfer(transfer) } != 0 {
-        // Resubmission failed (e.g. the device was unplugged) - stop
-        // tracking this transfer. It leaks, but that is harmless: it only
-        // happens as the stream is already on its way out. (It must not be
-        // freed here, because `run_iso`'s teardown still cancels it.)
+        return;
+    }
+
+    // Do not resubmit once the device is confirmed gone or resubmission
+    // fails (e.g. the device was unplugged) - stop tracking this transfer.
+    // It leaks, but that is harmless: it only happens as the stream is
+    // already on its way out. (It must not be freed here, because
+    // `run_iso`'s teardown still cancels it.)
+    if no_device || unsafe { ffi::libusb_submit_transfer(transfer) } != 0 {
+        user_data.device_gone = true;
         user_data.outstanding -= 1;
     }
 }
