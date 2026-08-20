@@ -60,6 +60,11 @@ async fn main() {
         .with_title("InfiRay P2Pro")
         .with_window_icon(load_window_icon());
     let config = Config::new().with_window(window).with_menu(None);
+
+    #[cfg(target_os = "android")]
+    let builder = dioxus::LaunchBuilder::mobile();
+
+    #[cfg(not(target_os = "android"))]
     let builder = dioxus::LaunchBuilder::desktop();
 
     tokio::task::unconstrained({
