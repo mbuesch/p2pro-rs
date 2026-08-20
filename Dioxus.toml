@@ -6,6 +6,14 @@ android_manifest = "android/AndroidManifest.xml"
 [bundle]
 identifier = "ch.bues.p2pro"
 publisher = "Michael Büsch"
+copyright = "Michael Büsch"
+icon = ["assets/icon-512x512.png"]
+#category = ""
+short_description = "InfiRay P2Pro Thermal Camera Viewer"
+long_description = "InfiRay P2Pro Thermal Camera Viewer"
 
 [android]
 features = ["android.hardware.usb.host"]
+min_sdk = 28 # Android 9
+target_sdk = 35 # Android 15
+compile_sdk = 35
