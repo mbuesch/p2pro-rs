@@ -4,12 +4,11 @@ A minimal InfiRay P2Pro thermal camera viewer.
 
 Features:
 
-- Live false-color ("ironbow"-style) view of the InfiRay P2Pro thermal camera
-- A temperature color-scale legend next to the image
-- Markers for the current frame's coldest and hottest pixels, with their
-  temperature labels
-- Automatic scaling: the color range always stretches to the current frame's
-  min/max temperature.
+- Live false-color ("ironbow"-style) view of the InfiRay P2Pro thermal camera.
+- A temperature color-scale legend next to the image.
+- Markers for the current frame's coldest and hottest pixels, with their temperature labels.
+- Automatic scaling: the color range always stretches to the current frame's min/max temperature.
+- Saving of the thermal image to a PNG file.
 
 ## Operating System Support
 
