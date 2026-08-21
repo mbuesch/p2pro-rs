@@ -109,7 +109,11 @@ async fn run_session(fd: RawFd, token: i64, to_ui: mpsc::Sender<CaptureState>) -
 }
 
 /// USB Video Class session (negotiation + streaming).
-fn run_session_blocking(fd: RawFd, token: i64, to_ui: mpsc::Sender<CaptureState>) -> ah::Result<()> {
+fn run_session_blocking(
+    fd: RawFd,
+    token: i64,
+    to_ui: mpsc::Sender<CaptureState>,
+) -> ah::Result<()> {
     let _session_guard = SessionGuard::new(token);
 
     let context = rusb::Context::new().context("Failed to create a libusb context")?;

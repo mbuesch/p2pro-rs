@@ -12,6 +12,7 @@ mod app;
 mod camera;
 mod colormap;
 mod render;
+mod save;
 
 fn load_window_icon() -> Option<dioxus::desktop::tao::window::Icon> {
     let bytes = include_bytes!("../assets/icon-64x64.png");

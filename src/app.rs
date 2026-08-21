@@ -5,6 +5,7 @@
 use crate::{
     camera::{CaptureState, ThermalFrame},
     colormap,
+    save::save_frame_png,
 };
 use dioxus::prelude::*;
 use std::sync::Arc;
@@ -16,6 +17,7 @@ const CSS: &str = include_str!("style.css");
 pub fn App() -> Element {
     let from_cam = use_context::<Arc<AsyncMutex<mpsc::Receiver<CaptureState>>>>();
     let mut state = use_signal(|| CaptureState::Connecting);
+    let running = use_signal(|| true);
 
     // Long-lived background task:
     // Waits on the capture thread's `mpsc` channel and re-renders the UI as soon as it changes.
@@ -27,6 +29,9 @@ pub fn App() -> Element {
                     eprintln!("Error: Capture thread has exited");
                     break;
                 };
+                if !running() && matches!(snapshot, CaptureState::Frame(_)) {
+                    continue; // While stopped, drop incoming frames.
+                }
                 state.set(snapshot);
             }
         })
@@ -55,7 +60,7 @@ pub fn App() -> Element {
                     }
                 }
                 CaptureState::Frame(frame) => rsx! {
-                    ThermalView { frame }
+                    ThermalView { frame, running }
                 },
             }
         }
@@ -85,7 +90,7 @@ struct GestureBaseline {
 }
 
 #[component]
-fn ThermalView(frame: ThermalFrame) -> Element {
+fn ThermalView(frame: ThermalFrame, mut running: Signal<bool>) -> Element {
     let min_left = percent(frame.min_pos.0, frame.width);
     let min_top = percent(frame.min_pos.1, frame.height);
     let max_left = percent(frame.max_pos.0, frame.width);
@@ -212,6 +217,17 @@ fn ThermalView(frame: ThermalFrame) -> Element {
         pan.set(np);
     };
 
+    let onstartstop = move |_| running.set(!running());
+    let onsave = {
+        let frame = frame.clone();
+        move |_| {
+            let frame = frame.clone();
+            spawn(async move {
+                save_frame_png(&frame).await;
+            });
+        }
+    };
+
     let surface_style = format!(
         "width: {fit_w}px; height: {fit_h}px; margin-left: {}px; margin-top: {}px; transform: translate({}px, {}px) scale({current_zoom});",
         -fit_w / 2.0,
@@ -231,7 +247,7 @@ fn ThermalView(frame: ThermalFrame) -> Element {
                 onpointercancel,
                 onwheel,
                 div { class: "image-surface", style: "{surface_style}",
-                    img { class: "thermal-img", src: "{frame.data_uri}" }
+                    img { class: "thermal-img", src: "{frame.png_uri}" }
                     div {
                         class: "marker marker-min",
                         style: "left: {min_left}%; top: {min_top}%;",
@@ -247,10 +263,22 @@ fn ThermalView(frame: ThermalFrame) -> Element {
                 }
             }
             div { class: "legend",
-                div { class: "legend-bar", style: "background: {gradient};" }
-                div { class: "legend-labels",
-                    span { "{frame.max_temp:.1}\u{00b0}C" }
-                    span { "{frame.min_temp:.1}\u{00b0}C" }
+                div { class: "legend-main",
+                    div { class: "legend-bar", style: "background: {gradient};" }
+                    div { class: "legend-labels",
+                        span { "{frame.max_temp:.1}\u{00b0}C" }
+                        span { "{frame.min_temp:.1}\u{00b0}C" }
+                    }
+                }
+                div { class: "controls",
+                    button { class: "control-btn", onclick: onstartstop,
+                        if running() {
+                            "Stop"
+                        } else {
+                            "Start"
+                        }
+                    }
+                    button { class: "control-btn", onclick: onsave, "Save" }
                 }
             }
         }

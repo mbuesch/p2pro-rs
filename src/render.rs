@@ -15,7 +15,8 @@ const MINMAX_TEMP_SMOOTHING: usize = 30;
 /// Result of rendering one frame: a ready-to-embed PNG data URI, the
 /// min/max temperatures found, and their pixel coordinates.
 pub struct RenderedFrame {
-    pub data_uri: String,
+    pub png_bytes: Vec<u8>,
+    pub png_uri: String,
     pub min_temp: f32,
     pub max_temp: f32,
     pub min_pos: (u32, u32),
@@ -77,12 +78,13 @@ impl Renderer {
         PngEncoder::new_with_quality(&mut png_bytes, CompressionType::Fast, FilterType::Sub)
             .write_image(&rgba, width, height, ExtendedColorType::Rgba8)
             .expect("encoding a thermal frame to PNG should never fail");
-        let mut data_uri = String::with_capacity(png_bytes.len() * 2);
-        data_uri.push_str("data:image/png;base64,");
-        STANDARD.encode_string(&png_bytes, &mut data_uri);
+        let mut png_uri = String::with_capacity(png_bytes.len() * 2);
+        png_uri.push_str("data:image/png;base64,");
+        STANDARD.encode_string(&png_bytes, &mut png_uri);
 
         RenderedFrame {
-            data_uri,
+            png_bytes,
+            png_uri,
             min_temp,
             max_temp,
             min_pos,

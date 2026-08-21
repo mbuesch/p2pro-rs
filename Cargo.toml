@@ -14,6 +14,7 @@ keywords = [ "infiray", "p2pro", "thermal", "camera" ]
 [dependencies]
 anyhow = "1"
 base64 = "0.23"
+chrono = "0.4"
 clap = { version = "4", features = [ "derive" ] }
 dioxus = { version = "0.7", features = [ "desktop", "mobile" ] }
 image = { version = "0.25", default-features = false, features = [ "png" ] }
@@ -21,6 +22,7 @@ movavg = "2"
 tokio = { version = "1", default-features = false, features = [ "sync", "fs", "rt-multi-thread" ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+rfd = { version = "0.15", default-features = false, features = [ "xdg-portal", "tokio" ] }
 v4l = "0.14"
 
 [target.'cfg(target_os = "android")'.dependencies]

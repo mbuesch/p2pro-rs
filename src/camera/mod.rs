@@ -29,7 +29,8 @@ pub enum CaptureState {
 
 #[derive(Clone, PartialEq)]
 pub struct ThermalFrame {
-    pub data_uri: String,
+    pub png_bytes: Vec<u8>,
+    pub png_uri: String,
     pub width: u32,
     pub height: u32,
     pub min_temp: f32,
@@ -94,7 +95,8 @@ pub(crate) fn decode_frame(
     let rendered = renderer.build_frame(WIDTH, HEIGHT, &temps);
 
     Some(ThermalFrame {
-        data_uri: rendered.data_uri,
+        png_bytes: rendered.png_bytes,
+        png_uri: rendered.png_uri,
         width: WIDTH,
         height: HEIGHT,
         min_temp: rendered.min_temp,

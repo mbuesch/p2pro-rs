@@ -126,6 +126,14 @@ h1 {
 .legend {
     display: flex;
     flex: 0 0 auto;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.legend-main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
     flex-direction: row;
     gap: 8px;
 }
@@ -141,4 +149,31 @@ h1 {
     justify-content: space-between;
     font-size: 13px;
     padding: 2px 0;
+}
+
+.controls {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.control-btn {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #e8e8e8;
+    background: #2a2d33;
+    border: 1px solid #444;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.control-btn:hover {
+    background: #34383f;
+}
+
+.control-btn:active {
+    background: #3d424a;
 }
