@@ -13,8 +13,8 @@ Features:
 
 ## Operating System Support
 
-- **Linux**: Stable.
-- **Android**: Does work - with minor glitches.
+- **Linux**
+- **Android**
 
 ## How it talks to the camera
 
