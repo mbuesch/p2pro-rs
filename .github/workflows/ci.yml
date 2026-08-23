@@ -25,22 +25,21 @@ jobs:
     runs-on: ${{ matrix.os.version }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Cache Rust
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.rustup
           key: rustup-${{ matrix.os.version }}-${{ matrix.toolchain.version }}
       - name: Cache Cargo
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cargo
           key: cargo-${{ matrix.os.version }}-${{ matrix.toolchain.version }}
 
       # Install Linux system dependencies required for Dioxus
       - name: Install Linux dependencies
-        if: matrix.os.name == 'linux'
         env:
           DEBIAN_FRONTEND: noninteractive
           APT_LISTCHANGES_FRONTEND: none
@@ -52,19 +51,94 @@ jobs:
       # Install toolchain
       - name: Install Rust toolchain
         run: rustup toolchain install ${{ matrix.toolchain.version }}
+      - name: Install Rust Android target
+        if: matrix.toolchain.name == 'stable'
+        run: rustup target add aarch64-linux-android
       - name: Set default toolchain
         run: rustup default ${{ matrix.toolchain.version }}
       - name: Install clippy
         if: matrix.toolchain.name == 'stable'
         run: rustup component add clippy
-      #- name: Install dioxus-cli
-      #  run: cargo install --locked dioxus-cli
 
-      # Build
+      # Install Android SDK
+      - uses: actions/setup-java@v5
+        if: matrix.toolchain.name == 'stable'
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Setup Android SDK
+        if: matrix.toolchain.name == 'stable'
+        uses: android-actions/setup-android@v4
+        with:
+          cmdline-tools-version: '16111833'
+      # Install Android NDK
+      - uses: nttld/setup-ndk@v1
+        if: matrix.toolchain.name == 'stable'
+        id: setup-ndk
+        with:
+          ndk-version: 'r29'
+          link-to-sdk: true
+          add-to-path: true
+      - name: Show Android tools
+        if: matrix.toolchain.name == 'stable'
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls -l "$ANDROID_HOME"
+          echo "$ANDROID_HOME/build-tools"
+          ls -l "$ANDROID_HOME/build-tools"
+          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          echo "BUILD_TOOLS_DIR=$BUILD_TOOLS_DIR"
+          ls -l "$BUILD_TOOLS_DIR"
+          echo "$ANDROID_HOME/cmdline-tools"
+          ls -l "$ANDROID_HOME/cmdline-tools"
+          CMDLINE_TOOLS_DIR=$(ls -d $ANDROID_HOME/cmdline-tools/* | sort -V | tail -1)
+          echo "CMDLINE_TOOLS_DIR=$CMDLINE_TOOLS_DIR/bin"
+          ls -l "$CMDLINE_TOOLS_DIR/bin"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          ls -l "$ANDROID_NDK_HOME"
+          echo "SDK Manager location:"
+          find "$ANDROID_HOME" -name sdkmanager
+          echo "apksigner location:"
+          find "$ANDROID_HOME" -name apksigner
+
+      # Check source code formatting
+      - name: Check source code formatting
+        if: matrix.toolchain.name == 'stable'
+        run: cargo fmt --all --check
+
+      # Build (Linux Desktop)
       - name: Build
         run: cargo build
 
       # Clippy
       - name: Clippy
         if: matrix.toolchain.name == 'stable'
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --all -- -D warnings
+
+      # Build (Android app)
+      - name: Install dioxus-cli
+        if: matrix.toolchain.name == 'stable'
+        run: cargo install --locked dioxus-cli
+      - name: Build Android
+        if: matrix.toolchain.name == 'stable'
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          export PATH="$BUILD_TOOLS_DIR:$PATH"
+          ./android-build.sh
+          mkdir p2pro-rs-aarch64
+          cp p2pro-rs-aarch64* debug.jks p2pro-rs-aarch64/
+
+      - uses: actions/upload-artifact@v7
+        if: matrix.toolchain.name == 'stable'
+        with:
+          name: p2pro-rs-android-app-aarch64
+          path: p2pro-rs-aarch64
+          retention-days: 90
+          if-no-files-found: 'error'
+          compression-level: 6
