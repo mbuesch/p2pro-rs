@@ -7,14 +7,19 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import java.lang.ref.WeakReference
 import kotlin.jvm.JvmStatic
 
@@ -98,6 +103,7 @@ class MainActivity : WryActivity() {
             @Suppress("UnspecifiedRegisterReceiverFlag")
             registerReceiver(usbReceiver, filter)
         }
+        setupEdgeToEdgeInsets()
         handleLaunchIntent(intent, "onCreate")
     }
 
@@ -109,6 +115,11 @@ class MainActivity : WryActivity() {
     override fun onResume() {
         super.onResume()
         scanUsbBus("onResume")
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        findViewById<View>(android.R.id.content)?.let { ViewCompat.requestApplyInsets(it) }
     }
 
     override fun onDestroy() {
@@ -235,6 +246,20 @@ class MainActivity : WryActivity() {
         } else {
             logUsb("Pending device ${pending.deviceName} is no longer attached; not reopening")
         }
+    }
+
+    private fun setupEdgeToEdgeInsets() {
+        val root = findViewById<View>(android.R.id.content) ?: return
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
+                view.updatePadding(left = 0, top = systemBars.top, right = 0, bottom = systemBars.bottom)
+            } else {
+                view.updatePadding(left = 0, top = 0, right = systemBars.right, bottom = 0)
+            }
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
     }
 
     private fun describe(device: UsbDevice): String {

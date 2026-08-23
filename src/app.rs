@@ -42,7 +42,7 @@ pub fn App() -> Element {
     rsx! {
         style { "{CSS}" }
         div { id: "app",
-            h1 { "P2Pro" }
+            h1 { "P2Pro - Thermal cam" }
             match current {
                 CaptureState::Connecting => rsx! {
                     p { class: "status", "Connecting to camera..." }
