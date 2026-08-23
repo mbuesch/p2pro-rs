@@ -3,7 +3,7 @@
 //! Android has no V4L2 access to arbitrary USB UVC devices.
 //! Instead this talks to the P2Pro directly over USB as a userspace UVC driver using `libusb`/`rusb`.
 
-mod jni_bridge;
+pub mod jni_bridge;
 mod protocol;
 mod stream;
 

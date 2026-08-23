@@ -18,6 +18,13 @@ ANDROID_RES="$ANDROID_APP/src/main/res"
 mkdir -p "$ANDROID_RES/xml"
 cp android/res/xml/device_filter.xml "$ANDROID_RES/xml/"
 
+# R8 (release minification) can't see the JNI call sites in native code, so it
+# would otherwise strip/rename MainActivity's JNI-called static methods.
+# Pre-seed a keep rule under a name dx's own template doesn't generate (unlike
+# proguard-rules.pro, which dx re-renders from scratch every build)
+mkdir -p "$ANDROID_APP"
+cp android/proguard-jni-keep.pro "$ANDROID_APP/"
+
 dx build --android --target aarch64-linux-android --release
 
 # dx hardcodes default launcher icons into the Android project and doesn't

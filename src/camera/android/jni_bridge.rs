@@ -1,16 +1,16 @@
+use anyhow::{self as ah, Context as _};
 use jni::{
     Env, EnvUnowned, JavaVM,
     errors::ThrowRuntimeExAndDefault,
-    objects::{JObject, JString, JValue},
-    jni_str,
-    jni_sig,
+    jni_sig, jni_str,
+    objects::{JClass, JObject, JString, JValue},
+    refs::Global,
 };
 use std::{
     os::fd::RawFd,
     sync::{LazyLock, OnceLock},
 };
 use tokio::sync::{Mutex as AsyncMutex, mpsc};
-use anyhow as ah;
 
 /// An event handed over from the Android `MainActivity`.
 pub enum UsbEvent {
@@ -35,6 +35,17 @@ static EVENT_CHANNEL: LazyLock<EventChannel> = LazyLock::new(|| {
 });
 
 static JVM: OnceLock<JavaVM> = OnceLock::new();
+static MAIN_ACTIVITY_CLASS: OnceLock<Global<JClass<'static>>> = OnceLock::new();
+
+/// Caches the `MainActivity` class.
+fn cache_main_activity_class(env: &mut Env<'_>) {
+    if MAIN_ACTIVITY_CLASS.get().is_none()
+        && let Ok(cls) = env.find_class(jni_str!("dev/dioxus/main/MainActivity"))
+        && let Ok(global) = env.new_global_ref(cls)
+    {
+        let _ = MAIN_ACTIVITY_CLASS.set(global);
+    }
+}
 
 /// Guard that notifies the Kotlin side when the native USB session ends.
 pub struct SessionGuard(i64);
@@ -68,16 +79,44 @@ fn notify_session_ended(session_token: i64) {
             return;
         }
     };
-    let _ = jvm.with_local_frame(4096, |env| -> ah::Result<()> {
-        if let Ok(cls) = env.find_class(jni_str!("dev/dioxus/main/MainActivity")) {
+    let _ = jvm.attach_current_thread(|env| -> ah::Result<()> {
+        if let Some(cls) = MAIN_ACTIVITY_CLASS.get() {
             let args = [JValue::Long(session_token)];
-            if let Err(e) = env.call_static_method(cls, jni_str!("onNativeUsbSessionEnded"), jni_sig!("(J)V"), &args) {
+            if let Err(e) = env.call_static_method(
+                cls,
+                jni_str!("onNativeUsbSessionEnded"),
+                jni_sig!((token: long) -> void),
+                &args,
+            ) {
                 log::error!("notify_session_ended: call_static_method failed: {e}");
                 clear_pending_exception(env);
             }
         }
         Ok(())
     });
+}
+
+/// Opens the Android Storage Access Framework save dialog.
+pub async fn save_file(filename: &str, bytes: &[u8]) -> ah::Result<()> {
+    let jvm = JVM.get().context("JVM not initialized")?;
+    let cls = MAIN_ACTIVITY_CLASS
+        .get()
+        .context("MainActivity class not cached yet")?;
+    jvm.attach_current_thread(|env| -> ah::Result<()> {
+        let filename_jstring = env.new_string(filename)?;
+        let bytes_array = env.byte_array_from_slice(bytes)?;
+        let args = [
+            JValue::Object(&filename_jstring),
+            JValue::Object(&bytes_array),
+        ];
+        env.call_static_method(
+            cls,
+            jni_str!("saveFileBytes"),
+            jni_sig!((filename: java.lang.String, bytes: byte[]) -> void),
+            &args,
+        )?;
+        Ok(())
+    })
 }
 
 pub async fn next_event() -> UsbEvent {
@@ -109,6 +148,7 @@ pub extern "system" fn Java_dev_dioxus_main_MainActivity_nativeUsbDeviceReady<'a
         if let Ok(jvm) = env.get_java_vm() {
             let _ = JVM.set(jvm);
         }
+        cache_main_activity_class(env);
         let _ = EVENT_CHANNEL.tx.send(UsbEvent::DeviceReady(
             fd as RawFd,
             vendor_id as u16,
@@ -135,6 +175,7 @@ pub extern "system" fn Java_dev_dioxus_main_MainActivity_nativeUsbLog<'a>(
         if let Ok(jvm) = env.get_java_vm() {
             let _ = JVM.set(jvm);
         }
+        cache_main_activity_class(env);
         if let Ok(s) = msg.try_to_string(&env) {
             let _ = EVENT_CHANNEL.tx.send(UsbEvent::Log(s));
         }

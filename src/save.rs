@@ -1,7 +1,7 @@
 use crate::camera::ThermalFrame;
 use chrono::prelude::*;
 
-fn make_filename() -> String {
+pub(crate) fn make_filename() -> String {
     Local::now()
         .format("p2pro_%Y-%m-%d_%H-%M-%S.png")
         .to_string()
@@ -23,5 +23,8 @@ pub async fn save_frame_png(frame: &ThermalFrame) {
 
 #[cfg(target_os = "android")]
 pub async fn save_frame_png(frame: &ThermalFrame) {
-    //TODO
+    use crate::camera::android::jni_bridge::save_file;
+    if let Err(e) = save_file(&make_filename(), &frame.png_bytes).await {
+        eprintln!("Error: Saving the thermal image failed: {e}");
+    }
 }

@@ -36,6 +36,7 @@ class MainActivity : WryActivity() {
     private var pendingAfterCameraPermission: UsbDevice? = null
     private var pendingOpenDevice: UsbDevice? = null
     private var sessionToken: Long = 0L
+    private var pendingSaveBytes: ByteArray? = null
 
     private val cameraPermissionLauncher: ActivityResultLauncher<String> =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -48,6 +49,24 @@ class MainActivity : WryActivity() {
                 } else {
                     logUsb("Cannot request USB permission for ${device.deviceName} without CAMERA permission")
                 }
+            }
+        }
+
+    private val saveLauncher: ActivityResultLauncher<String> =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
+            val bytes = pendingSaveBytes
+            pendingSaveBytes = null
+            if (bytes == null) {
+                return@registerForActivityResult
+            }
+            if (uri == null) {
+                return@registerForActivityResult
+            }
+            try {
+                contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(bytes)
+                } ?: throw IllegalStateException("openOutputStream returned null")
+            } catch (e: Exception) {
             }
         }
 
@@ -288,13 +307,26 @@ class MainActivity : WryActivity() {
     /** Implemented in Rust, see src/camera/android/jni_bridge.rs. */
     private external fun nativeUsbLog(msg: String)
 
-    private companion object {
+    companion object {
         const val TAG = "P2ProUsb"
         const val ACTION_USB_PERMISSION = "dev.dioxus.main.USB_PERMISSION"
         const val P2PRO_VENDOR_ID = 0x0bda
         const val P2PRO_PRODUCT_ID = 0x5830
 
         private var currentActivity: WeakReference<MainActivity>? = null
+
+        /** Called from Rust to open the save dialog. */
+        @JvmStatic
+        fun saveFileBytes(filename: String, bytes: ByteArray) {
+            val activity = currentActivity?.get()
+                ?: throw IllegalStateException("Activity not available")
+            if (activity.pendingSaveBytes == null) {
+                activity.pendingSaveBytes = bytes
+                activity.runOnUiThread {
+                    activity.saveLauncher.launch(filename)
+                }
+            }
+        }
 
         /** Called from Rust once the native USB session has ended. */
         @JvmStatic

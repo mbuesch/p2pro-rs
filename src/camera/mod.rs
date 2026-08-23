@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 mod v4l;
 
 #[cfg(target_os = "android")]
-mod android;
+pub mod android;
 
 /// Width of both the video and thermal half, in pixels.
 pub const WIDTH: u32 = 256;
