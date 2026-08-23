@@ -55,14 +55,14 @@ cp android/res/mipmap-xxxhdpi/ic_launcher.webp             "$ANDROID_RES/mipmap-
 
 # Rebuild the release APK with the updated icons.
 (
-    cd target/dx/p2pro-rs/release/android/app
+    cd "$ANDROID_APP/.."
     ./gradlew packageRelease
     ./gradlew bundleRelease
 )
 
-cp ./target/dx/p2pro-rs/release/android/app/app/build/outputs/apk/release/app-release-unsigned.apk \
+cp "./$ANDROID_APP/build/outputs/apk/release/app-release-unsigned.apk" \
    ./p2pro-rs-aarch64-unsigned.apk
-cp ./target/dx/p2pro-rs/release/android/app/app/build/outputs/bundle/release/app-release.aab \
+cp "./$ANDROID_APP/build/outputs/bundle/release/app-release.aab" \
    ./p2pro-rs-aarch64-unsigned.aab
 
 ./android-sign.sh
