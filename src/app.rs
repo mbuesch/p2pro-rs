@@ -2,11 +2,7 @@
 //! and a color-scale legend. See `camera.rs` for the capture thread that
 //! feeds this UI through shared state.
 
-use crate::{
-    camera::{CaptureState, ThermalFrame},
-    colormap,
-    save::save_frame_png,
-};
+use crate::{camera::CaptureState, colormap, render::RenderedFrame, save::save_frame_png};
 use dioxus::prelude::*;
 use std::sync::Arc;
 use tokio::sync::{Mutex as AsyncMutex, mpsc};
@@ -90,7 +86,7 @@ struct GestureBaseline {
 }
 
 #[component]
-fn ThermalView(frame: ThermalFrame, mut running: Signal<bool>) -> Element {
+fn ThermalView(frame: RenderedFrame, mut running: Signal<bool>) -> Element {
     let min_left = percent(frame.min_pos.0, frame.width);
     let min_top = percent(frame.min_pos.1, frame.height);
     let max_left = percent(frame.max_pos.0, frame.width);

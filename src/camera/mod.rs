@@ -1,7 +1,7 @@
 //! Thermal camera capture: shared frame/state types, plus a platform-specific
 //! capture backend.
 
-use crate::render::Renderer;
+use crate::render::{RenderedFrame, Renderer};
 use std::path::Path;
 use tokio::sync::mpsc;
 
@@ -24,19 +24,7 @@ pub enum CaptureState {
     Connecting,
     Info(String),
     Error(String),
-    Frame(ThermalFrame),
-}
-
-#[derive(Clone, PartialEq)]
-pub struct ThermalFrame {
-    pub png_bytes: Vec<u8>,
-    pub png_uri: String,
-    pub width: u32,
-    pub height: u32,
-    pub min_temp: f32,
-    pub max_temp: f32,
-    pub min_pos: (u32, u32),
-    pub max_pos: (u32, u32),
+    Frame(RenderedFrame),
 }
 
 pub struct Camera;
@@ -61,7 +49,7 @@ impl Camera {
 }
 
 /// Decodes one raw YUYV buffer (full frame: video half on top, thermal half
-/// on the bottom, see module docs) into a rendered [`ThermalFrame`], using
+/// on the bottom, see module docs) into a rendered [`RenderedFrame`], using
 /// `renderer` for the false-color mapping. Returns `None` if the buffer is
 /// short (a dropped/truncated frame - just skip it).
 ///
@@ -70,7 +58,7 @@ pub(crate) fn decode_frame(
     renderer: &mut Renderer,
     buf: &[u8],
     stride: usize,
-) -> Option<ThermalFrame> {
+) -> Option<RenderedFrame> {
     let half_height = HEIGHT as usize;
     let width = WIDTH as usize;
 
@@ -94,14 +82,5 @@ pub(crate) fn decode_frame(
 
     let rendered = renderer.build_frame(WIDTH, HEIGHT, &temps);
 
-    Some(ThermalFrame {
-        png_bytes: rendered.png_bytes,
-        png_uri: rendered.png_uri,
-        width: WIDTH,
-        height: HEIGHT,
-        min_temp: rendered.min_temp,
-        max_temp: rendered.max_temp,
-        min_pos: rendered.min_pos,
-        max_pos: rendered.max_pos,
-    })
+    Some(rendered)
 }
