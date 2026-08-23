@@ -15,18 +15,19 @@ keywords = [ "infiray", "p2pro", "thermal", "camera" ]
 anyhow = "1"
 base64 = "0.23"
 chrono = "0.4"
-clap = { version = "4", features = [ "derive" ] }
-dioxus = { version = "0.7", features = [ "desktop", "mobile" ] }
 image = { version = "0.25", default-features = false, features = [ "png" ] }
 movavg = "2"
 tokio = { version = "1", default-features = false, features = [ "sync", "fs", "rt-multi-thread" ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+clap = { version = "4", features = [ "derive" ] }
+dioxus = { version = "0.7", default-features = false, features = [ "desktop", "minimal", "document" ] }
 rfd = { version = "0.17", default-features = false, features = [ "xdg-portal" ] }
 v4l = "0.14"
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.15"
+dioxus = { version = "0.7", default-features = false, features = [ "mobile", "minimal", "document" ] }
 jni = "0.22"
 libc = "0.2"
 log = "0.4"
@@ -37,6 +38,6 @@ debug = "limited"
 panic = "abort"
 
 [profile.release]
-lto = "thin"
+lto = "fat"
 panic = "abort"
 strip = "symbols"
