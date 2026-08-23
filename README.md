@@ -52,6 +52,18 @@ You can just copy the `p2pro-rs` binary to a convenient location and run it from
 
 ## Running on Android
 
+If you do not want to build the app yourself, you can download the latest APK from
+[Github CI](https://github.com/mbuesch/p2pro-rs/actions/workflows/ci.yml).
+Pick the latest successful run from the `main` branch and download the `p2pro-rs-android-app-aarch64` artifact.
+The provided APK is meant for ADB (USB) sideloading.
+Proceed with `android-install.sh` from that artifact (see below) for sideloading.
+
+Note that the APK is signed with a debug key and is only provided on a best-effort basis.
+It should work properly, but it's not regularly tested.
+If there are problems with the pre-built APK, please file an issue.
+
+### If you want to build the app yourself (recommended), follow these steps
+
 First install [Rust](https://www.rust-lang.org/tools/install) on the build PC (Linux).
 
 Before running the Android build script, ensure you have the Android NDK and SDK installed and properly configured on the build PC.
@@ -79,7 +91,7 @@ On the build PC (Linux) run the provided script to build the Android packages:
 ./android-build.sh
 ```
 
-Install the generated APK on your Android device (via ADB).
+Install the generated APK on your Android device (via ADB sideloading).
 Plug in your Android device, ensure Developer Mode, USB debugging and Sideloading are enabled, and run:
 
 ```sh
