@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-basedir="$(realpath "$0" | xargs dirname)"
+basedir="$(dirname "$(realpath "$0")")"
 cd "$basedir"
 
 if [ -z "$APK_SIGNED" ]; then APK_SIGNED="p2pro-rs-aarch64.apk"; fi

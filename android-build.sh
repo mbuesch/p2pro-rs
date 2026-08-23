@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-basedir="$(realpath "$0" | xargs dirname)"
+basedir="$(dirname "$(realpath "$0")")"
 cd "$basedir"
 
 export CFLAGS= CXXFLAGS= CPPFLAGS= LDFLAGS= RUSTFLAGS=

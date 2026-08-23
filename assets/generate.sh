@@ -3,7 +3,7 @@
 # Requires: rsvg-convert (librsvg), convert (ImageMagick), python3 + python3-lxml
 set -e
 
-basedir="$(realpath "$0" | xargs dirname)"
+basedir="$(dirname "$(realpath "$0")")"
 cd "$basedir/.."
 
 command -v rsvg-convert >/dev/null 2>&1 || { echo "rsvg-convert not found. Please install librsvg." >&2; exit 1; }

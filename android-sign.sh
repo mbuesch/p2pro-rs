@@ -24,7 +24,7 @@
 
 set -e
 
-basedir="$(realpath "$0" | xargs dirname)"
+basedir="$(dirname "$(realpath "$0")")"
 
 if [ -z "$APK_UNSIGNED" ]; then APK_UNSIGNED="p2pro-rs-aarch64-unsigned.apk"; fi
 if [ -z "$APK_SIGNED" ]; then APK_SIGNED="p2pro-rs-aarch64.apk"; fi
