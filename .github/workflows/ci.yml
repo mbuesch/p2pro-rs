@@ -132,7 +132,16 @@ jobs:
           export PATH="$BUILD_TOOLS_DIR:$PATH"
           ./android-build.sh
           mkdir p2pro-rs-aarch64
-          cp p2pro-rs-aarch64* p2pro-rs-aarch64/
+          cp \
+            p2pro-rs-aarch64.aab \
+            p2pro-rs-aarch64.apk \
+            p2pro-rs-aarch64.apk.idsig \
+            p2pro-rs-aarch64-unsigned.aab \
+            p2pro-rs-aarch64-unsigned.apk \
+            android-install.sh \
+            android-connect-tcpip.sh \
+            android-logcat.sh \
+            p2pro-rs-aarch64/
 
       - uses: actions/upload-artifact@v7
         if: matrix.toolchain.name == 'stable'
