@@ -46,7 +46,7 @@ if ! [ -r "$AAB_UNSIGNED" ]; then
     die "Error: unsigned AAB not found at $AAB_UNSIGNED. Please run android-build.sh first."
 fi
 if [ -z "$ANDROID_KEYSTORE" ]; then
-    ANDROID_KEYSTORE="$basedir/debug.jks"
+    ANDROID_KEYSTORE="$basedir/android/debug.jks"
     ANDROID_KEYSTORE_PASSWORD=android
     ANDROID_KEY_PASSWORD=android
     ANDROID_KEY_ALIAS=debug-key

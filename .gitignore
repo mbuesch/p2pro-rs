@@ -2,6 +2,7 @@
 *.apk
 *.idsig
 *.jks
+!/android/debug.jks
 /.mcp.json
 /.vscode/
 /android-sign-release.sh

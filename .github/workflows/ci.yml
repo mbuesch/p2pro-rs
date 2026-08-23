@@ -132,7 +132,7 @@ jobs:
           export PATH="$BUILD_TOOLS_DIR:$PATH"
           ./android-build.sh
           mkdir p2pro-rs-aarch64
-          cp p2pro-rs-aarch64* debug.jks p2pro-rs-aarch64/
+          cp p2pro-rs-aarch64* p2pro-rs-aarch64/
 
       - uses: actions/upload-artifact@v7
         if: matrix.toolchain.name == 'stable'
