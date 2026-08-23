@@ -27,6 +27,20 @@ cp android/proguard-jni-keep.pro "$ANDROID_APP/"
 
 dx build --android --target aarch64-linux-android --release
 
+# Fix the generated display name (dx derives it from the binary name).
+sed -i 's|<string name="app_name">P2ProRs</string>|<string name="app_name">InfiRay P2Pro Rs</string>|' \
+    "$ANDROID_RES/values/strings.xml"
+
+# dx hardcodes versionCode = 1 in its build.gradle.kts template.  Derive it
+# from the Cargo workspace version (major*10000 + minor*100 + patch).
+VERSION="$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')"
+VER_MAJOR="$(echo "$VERSION" | cut -d. -f1)"
+VER_MINOR="$(echo "$VERSION" | cut -d. -f2)"
+VER_PATCH="$(echo "$VERSION" | cut -d. -f3)"
+VERSION_CODE="$(expr "$VER_MAJOR" \* 10000 + "$VER_MINOR" \* 100 + "$VER_PATCH")"
+sed -i "s/versionCode = 1\b/versionCode = $VERSION_CODE/" \
+    "$ANDROID_APP/build.gradle.kts"
+
 # dx hardcodes default launcher icons into the Android project and doesn't
 # honour [bundle] icon or [android] icon for Android builds.  Work around
 # this by overwriting the generated resources and re-running gradle.
