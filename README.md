@@ -55,7 +55,10 @@ You can just copy the `p2pro-rs` binary to a convenient location and run it from
 First install [Rust](https://www.rust-lang.org/tools/install) on the build PC (Linux).
 
 Before running the Android build script, ensure you have the Android NDK and SDK installed and properly configured on the build PC.
-The easiest way to get them is to install [Android Studio](https://developer.android.com/studio), which includes both.
+The easiest way to get them is to install
+[Android Studio](https://developer.android.com/studio),
+and use the
+[Dioxus install tutorial](https://dioxuslabs.com/learn/0.7/guides/platforms/mobile).
 For the build script to work, you need to set the some environment variables to point to your Android NDK and SDK installations.
 
 ```sh
