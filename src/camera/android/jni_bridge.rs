@@ -22,12 +22,12 @@ pub enum UsbEvent {
 }
 
 struct EventChannel {
-    tx: mpsc::UnboundedSender<UsbEvent>,
-    rx: AsyncMutex<mpsc::UnboundedReceiver<UsbEvent>>,
+    tx: mpsc::Sender<UsbEvent>,
+    rx: AsyncMutex<mpsc::Receiver<UsbEvent>>,
 }
 
 static EVENT_CHANNEL: LazyLock<EventChannel> = LazyLock::new(|| {
-    let (tx, rx) = mpsc::unbounded_channel();
+    let (tx, rx) = mpsc::channel(128);
     EventChannel {
         tx,
         rx: AsyncMutex::new(rx),
@@ -149,12 +149,14 @@ pub extern "system" fn Java_dev_dioxus_main_MainActivity_nativeUsbDeviceReady<'a
             let _ = JVM.set(jvm);
         }
         cache_main_activity_class(env);
-        let _ = EVENT_CHANNEL.tx.send(UsbEvent::DeviceReady(
+        if let Err(e) = EVENT_CHANNEL.tx.try_send(UsbEvent::DeviceReady(
             fd as RawFd,
             vendor_id as u16,
             product_id as u16,
             token,
-        ));
+        )) {
+            eprintln!("Failed to send USB device ready event: {:?}", e);
+        }
         Ok(())
     })
     .resolve::<ThrowRuntimeExAndDefault>()
@@ -177,7 +179,9 @@ pub extern "system" fn Java_dev_dioxus_main_MainActivity_nativeUsbLog<'a>(
         }
         cache_main_activity_class(env);
         if let Ok(s) = msg.try_to_string(&env) {
-            let _ = EVENT_CHANNEL.tx.send(UsbEvent::Log(s));
+            if let Err(e) = EVENT_CHANNEL.tx.try_send(UsbEvent::Log(s)) {
+                eprintln!("Failed to send USB log event: {:?}", e);
+            }
         }
         Ok(())
     })
