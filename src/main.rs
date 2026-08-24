@@ -1,3 +1,6 @@
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+std::compile_error!("p2pro-rs is only supported on Linux and Android platforms.");
+
 use crate::camera::Camera;
 use std::{path::PathBuf, sync::Arc};
 use tokio::{
