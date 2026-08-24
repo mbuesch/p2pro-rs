@@ -34,27 +34,24 @@ impl Camera {
     /// retrying on error (e.g. camera unplugged or not found yet).
     ///
     /// `device_path` (an explicit `/dev/videoX` path) is only meaningful on
-    /// the V4L2 (Linux desktop) backend; it is ignored on Android, which has
-    /// no such device nodes.
+    /// the V4L2 (Linux desktop) backend; it must be None on Android.
     pub async fn capture_loop(device_path: Option<&Path>, to_ui: mpsc::Sender<CaptureState>) {
         #[cfg(target_os = "linux")]
         v4l::capture_loop(device_path, to_ui).await;
 
         #[cfg(target_os = "android")]
         {
-            let _ = device_path;
+            assert!(device_path.is_none());
             android::capture_loop(to_ui).await;
         }
     }
 }
 
-/// Decodes one raw YUYV buffer (full frame: video half on top, thermal half
-/// on the bottom, see module docs) into a rendered [`RenderedFrame`], using
-/// `renderer` for the false-color mapping. Returns `None` if the buffer is
-/// short (a dropped/truncated frame - just skip it).
+/// Decodes one raw YUYV buffer into a [`RenderedFrame`].
+/// Full frame: Video half on top, thermal half on the bottom.
 ///
 /// `stride` is the number of bytes per row (>= `WIDTH * 2`).
-pub(crate) fn decode_frame(
+pub fn decode_frame(
     renderer: &mut Renderer,
     buf: &[u8],
     stride: usize,
