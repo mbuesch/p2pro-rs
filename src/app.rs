@@ -87,10 +87,6 @@ struct GestureBaseline {
 
 #[component]
 fn ThermalView(frame: RenderedFrame, mut running: Signal<bool>) -> Element {
-    let min_left = percent(frame.min_pos.0, frame.width);
-    let min_top = percent(frame.min_pos.1, frame.height);
-    let max_left = percent(frame.max_pos.0, frame.width);
-    let max_top = percent(frame.max_pos.1, frame.height);
     let gradient = colormap::css_gradient();
 
     let mut zoom = use_signal(|| MIN_ZOOM);
@@ -145,6 +141,29 @@ fn ThermalView(frame: RenderedFrame, mut running: Signal<bool>) -> Element {
     let current_zoom = zoom();
     let current_pan = pan();
     let is_panning = !pointers().is_empty();
+
+    // Compute marker positions in CSS px inside image-wrap.
+    // The markers live outside the scaled surface so their size stays constant.
+    let fit_size = (fit_w, fit_h);
+    let wrap_origin = (wl, wt);
+    let (min_left, min_top) = marker_screen_px(
+        frame.min_pos,
+        &frame,
+        box_center,
+        current_pan,
+        current_zoom,
+        fit_size,
+        wrap_origin,
+    );
+    let (max_left, max_top) = marker_screen_px(
+        frame.max_pos,
+        &frame,
+        box_center,
+        current_pan,
+        current_zoom,
+        fit_size,
+        wrap_origin,
+    );
 
     let onpointerdown = move |evt: Event<PointerData>| {
         evt.prevent_default();
@@ -244,18 +263,18 @@ fn ThermalView(frame: RenderedFrame, mut running: Signal<bool>) -> Element {
                 onwheel,
                 div { class: "image-surface", style: "{surface_style}",
                     img { class: "thermal-img", src: "{frame.png_uri}" }
-                    div {
-                        class: "marker marker-min",
-                        style: "left: {min_left}%; top: {min_top}%;",
-                        span { class: "dot" }
-                        span { class: "label", "{frame.min_temp:.1}\u{00b0}C" }
-                    }
-                    div {
-                        class: "marker marker-max",
-                        style: "left: {max_left}%; top: {max_top}%;",
-                        span { class: "dot" }
-                        span { class: "label", "{frame.max_temp:.1}\u{00b0}C" }
-                    }
+                }
+                div {
+                    class: "marker marker-min",
+                    style: "left: {min_left}px; top: {min_top}px;",
+                    span { class: "dot" }
+                    span { class: "label", "{frame.min_temp:.1}\u{00b0}C" }
+                }
+                div {
+                    class: "marker marker-max",
+                    style: "left: {max_left}px; top: {max_top}px;",
+                    span { class: "dot" }
+                    span { class: "label", "{frame.max_temp:.1}\u{00b0}C" }
                 }
             }
             div { class: "legend",
@@ -350,12 +369,31 @@ fn clamp_pan(
     (pan.0.clamp(-max_x, max_x), pan.1.clamp(-max_y, max_y))
 }
 
-/// Percentage position of pixel coordinate `v` along an axis of `total`
-/// pixels, for placing a marker over the (CSS-scaled) image.
-fn percent(v: u32, total: u32) -> f32 {
-    if total <= 1 {
+/// Maps a pixel coordinate in the thermal frame to a CSS `left`/`top`
+/// position in `image-wrap` px, accounting for the current zoom and pan.
+fn marker_screen_px(
+    pos: (u32, u32),
+    frame: &RenderedFrame,
+    box_center: (f64, f64),
+    pan: (f64, f64),
+    zoom: f64,
+    fit_size: (f64, f64),
+    wrap_origin: (f64, f64),
+) -> (f64, f64) {
+    let nx = if frame.width <= 1 {
         0.0
     } else {
-        (v as f32 / (total - 1) as f32 * 100.0).clamp(0.0, 100.0)
-    }
+        pos.0 as f64 / (frame.width - 1) as f64
+    };
+    let ny = if frame.height <= 1 {
+        0.0
+    } else {
+        pos.1 as f64 / (frame.height - 1) as f64
+    };
+    let img_w = fit_size.0 * zoom;
+    let img_h = fit_size.1 * zoom;
+    let center = (box_center.0 + pan.0, box_center.1 + pan.1);
+    let abs_x = center.0 - img_w / 2.0 + nx * img_w;
+    let abs_y = center.1 - img_h / 2.0 + ny * img_h;
+    (abs_x - wrap_origin.0, abs_y - wrap_origin.1)
 }
