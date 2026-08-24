@@ -70,7 +70,7 @@ async fn main() {
     let builder = {
         let window = WindowBuilder::new()
             .with_always_on_top(false)
-            .with_title("InfiRay P2Pro")
+            .with_title("InfiRay P2Pro Rs")
             .with_window_icon(load_window_icon());
         let config = Config::new().with_window(window).with_menu(None);
         dioxus::LaunchBuilder::desktop().with_cfg(config)

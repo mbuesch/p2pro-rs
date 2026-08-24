@@ -23,11 +23,11 @@ use v4l::{
 };
 
 async fn probe_devices(to_ui: mpsc::Sender<CaptureState>) -> ah::Result<(V4lDevice, PathBuf)> {
-    println!("Probing for p2pro device in /dev/video* ...");
+    println!("Probing for P2Pro device in /dev/video* ...");
     loop {
         let _ = to_ui
             .send(CaptureState::Info(
-                "Probing for p2pro device in /dev/video*\nPlug in your device now ...".to_string(),
+                "Probing for P2Pro device in /dev/video*\nPlug in your device now ...".to_string(),
             ))
             .await;
 
@@ -40,7 +40,7 @@ async fn probe_devices(to_ui: mpsc::Sender<CaptureState>) -> ah::Result<(V4lDevi
                 && name.starts_with("video")
                 && let Ok(camera) = V4lDevice::new(&entry.path(), to_ui.clone())
             {
-                println!("Found p2pro device: {}", entry.path().display());
+                println!("Found P2Pro device: {}", entry.path().display());
                 return Ok((camera, entry.path()));
             }
         }
@@ -117,7 +117,7 @@ impl V4lDevice {
 
 /// Runs forever: (re)connects to the camera and streams frames into `to_ui`,
 /// retrying on error (e.g. camera unplugged or not found yet).
-pub(super) async fn capture_loop(device_path: Option<&Path>, to_ui: mpsc::Sender<CaptureState>) {
+pub async fn capture_loop(device_path: Option<&Path>, to_ui: mpsc::Sender<CaptureState>) {
     loop {
         let camera = if let Some(device_path) = &device_path {
             // Open the specified device.
@@ -135,13 +135,13 @@ pub(super) async fn capture_loop(device_path: Option<&Path>, to_ui: mpsc::Sender
                 }
             }
         } else {
-            // Try to find a p2pro camera device.
+            // Try to find a P2Pro camera device.
             match probe_devices(to_ui.clone()).await {
                 Ok(c) => Some(c),
                 Err(e) => {
                     let _ = to_ui
                         .send(CaptureState::Error(format!(
-                            "Error probing for p2pro device:\n{e}\nGiving up.",
+                            "Error probing for P2Pro device:\n{e}\nGiving up.",
                         )))
                         .await;
                     // Do not try again. If probing fails then it's fatal.

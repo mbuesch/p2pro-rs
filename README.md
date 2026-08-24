@@ -9,6 +9,7 @@ Features:
 - Markers for the current frame's coldest and hottest pixels, with their temperature labels.
 - Automatic scaling: the color range always stretches to the current frame's min/max temperature.
 - Saving of the thermal image to a PNG file.
+- Zoom and pan of the live thermal image.
 
 ## Operating System Support
 
@@ -23,7 +24,7 @@ The top half of that buffer is a normal 8-bit preview (ignored here) and the bot
 How that YUYV stream is obtained depends on the platform:
 
 - **Linux desktop**: opened directly via Video4Linux2.
-- **Android**: Android does not expose a V4L2. Instead, the app drives the P2Pro's USB Video Class protocol itself over `libusb` (the `rusb` crate).
+- **Android**: Android does not expose a V4L2. Instead, the app drives the P2Pro's USB Video Class protocol itself.
 
 ## Running on Linux
 

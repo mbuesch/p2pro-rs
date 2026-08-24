@@ -15,8 +15,11 @@ const STOPS: [(f32, [u8; 3]); 8] = [
     (1.00, [255, 255, 255]),
 ];
 
+#[inline]
 fn lerp_u8(a: u8, b: u8, t: f32) -> u8 {
-    (a as f32 + (b as f32 - a as f32) * t).round() as u8
+    let a = a as f32;
+    let b = b as f32;
+    (a + ((b - a) * t)).round().clamp(0.0, 255.0) as u8
 }
 
 /// Builds a 256-entry RGBA lookup table spanning the palette, so that
