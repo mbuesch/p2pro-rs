@@ -31,12 +31,12 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.rustup
-          key: rustup-${{ matrix.os.version }}-${{ matrix.toolchain.version }}
+          key: rustup-${{ matrix.os }}-${{ matrix.toolchain.version }}
       - name: Cache Cargo
         uses: actions/cache@v6
         with:
           path: ~/.cargo
-          key: cargo-${{ matrix.os.version }}-${{ matrix.toolchain.version }}
+          key: cargo-${{ matrix.os }}-${{ matrix.toolchain.version }}
 
       # Install Linux system dependencies required for Dioxus
       - name: Install Linux dependencies
