@@ -107,8 +107,6 @@ Copyright (c) 2026 Michael Büsch
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-## Acknowledgements
-
 This program has initially been AI-derived from the p2pro-live Python application.
 
 Copyright of the original p2pro-live application:

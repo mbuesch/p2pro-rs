@@ -16,7 +16,7 @@ anyhow = "1"
 base64 = "0.23"
 chrono = "0.4"
 image = { version = "0.25", default-features = false, features = [ "png" ] }
-movavg = "2"
+movavg = "3"
 tokio = { version = "1", default-features = false, features = [ "sync", "fs", "rt-multi-thread" ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
