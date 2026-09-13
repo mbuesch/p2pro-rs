@@ -21,11 +21,11 @@ mod save;
 
 #[cfg(not(target_os = "android"))]
 fn load_window_icon() -> Option<dioxus::desktop::tao::window::Icon> {
-    let bytes = include_bytes!("../assets/icon-64x64.png");
-    let image = image::load_from_memory(bytes).ok()?;
-    let rgba = image.to_rgba8();
-    let (width, height) = rgba.dimensions();
-    dioxus::desktop::tao::window::Icon::from_rgba(rgba.into_raw(), width, height).ok()
+    let (header, rgba) =
+        include_bytes!(concat!(env!("OUT_DIR"), "/icon.rgba")).split_at_checked(4 + 4)?;
+    let width = u32::from_le_bytes(header[0..4].try_into().ok()?);
+    let height = u32::from_le_bytes(header[4..8].try_into().ok()?);
+    dioxus::desktop::tao::window::Icon::from_rgba(rgba.to_vec(), width, height).ok()
 }
 
 #[cfg(target_os = "android")]

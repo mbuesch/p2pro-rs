@@ -34,6 +34,9 @@ libc = "0.2"
 log = "0.4"
 rusb = { version = "0.9", features = [ "vendored" ] }
 
+[build-dependencies]
+image = { version = "0.25", default-features = false, features = [ "png" ] }
+
 [profile.dev]
 debug = "limited"
 panic = "abort"
