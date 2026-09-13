@@ -749,6 +749,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "curveipo"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a010408570ed3f707167cfa70bc7ffb3ea3ee01539c6fa6f74770a8b3565b7f"
+
+[[package]]
 name = "darling"
 version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3067,6 +3073,7 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "clap",
+ "curveipo",
  "dioxus",
  "image",
  "jni 0.22.4",
