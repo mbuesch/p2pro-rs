@@ -15,7 +15,7 @@ keywords = [ "infiray", "p2pro", "thermal", "camera" ]
 anyhow = "1"
 base64 = "0.23"
 chrono = "0.4"
-curveipo = "1"
+curveipo = { version = "1", features = [ "fastfloat" ] }
 image = { version = "0.25", default-features = false, features = [ "png" ] }
 movavg = "3"
 tokio = { version = "1", default-features = false, features = [ "sync", "fs", "rt-multi-thread" ] }

@@ -750,9 +750,12 @@ dependencies = [
 
 [[package]]
 name = "curveipo"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a010408570ed3f707167cfa70bc7ffb3ea3ee01539c6fa6f74770a8b3565b7f"
+checksum = "486f8bdef3d6996b099e367ef27c64c1b8e69538c23fa56d5dfc70124d12c44d"
+dependencies = [
+ "autocfg",
+]
 
 [[package]]
 name = "darling"
