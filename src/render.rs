@@ -1,7 +1,7 @@
 //! Turns a temperature grid into a false-color PNG (as a data: URI) plus the
 //! min/max statistics needed to draw markers and the legend.
 
-use crate::colormap::build_color_lut;
+use crate::{app::FromUi, colormap::build_color_lut};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::{
     ExtendedColorType, ImageEncoder,
@@ -23,6 +23,10 @@ pub struct RenderedFrame {
     pub max_temp: f32,
     pub min_pos: (u32, u32),
     pub max_pos: (u32, u32),
+    /// Effective scale used for coloring: the manual limit where set,
+    /// otherwise the smoothed auto min/max.
+    pub scale_min: f32,
+    pub scale_max: f32,
 }
 
 pub struct Renderer {
@@ -40,9 +44,18 @@ impl Renderer {
         }
     }
 
-    /// Maps `temps` (row-major, `width` x `height`) through `lut` after
-    /// auto-scaling to the frame's own min/max, and encodes the result as PNG.
-    pub fn build_frame(&mut self, width: u32, height: u32, temps: &[f32]) -> RenderedFrame {
+    /// Maps `temps` (row-major, `width` x `height`) through the color LUT and
+    /// encodes the result as PNG.
+    ///
+    /// The scale auto-spans the frame's own smoothed min/max; each side of
+    /// `from_ui`, when set, pins that end of the scale to a fixed temperature.
+    pub fn build_frame(
+        &mut self,
+        width: u32,
+        height: u32,
+        temps: &[f32],
+        from_ui: &FromUi,
+    ) -> RenderedFrame {
         let mut min_temp = f32::MAX;
         let mut max_temp = f32::MIN;
         let mut min_pos = (0, 0);
@@ -65,13 +78,15 @@ impl Renderer {
         min_temp = self.min_temp.feed(min_temp);
         max_temp = self.max_temp.feed(max_temp);
 
-        // Auto-scale: the color range always spans exactly this frame's min/max.
-        let range = (max_temp - min_temp).max(0.1);
+        // Effective scale: manual limits replace the auto-scale.
+        let scale_min = from_ui.min_temp.unwrap_or(min_temp);
+        let scale_max = from_ui.max_temp.unwrap_or(max_temp);
+        let range = (scale_max - scale_min).max(0.1);
 
         // Convert to RGBA8 using the color LUT.
         let mut rgba_bytes = Vec::with_capacity((width * height * 4) as usize);
         for t in temps {
-            let n = (((t - min_temp) / range) * 255.0).clamp(0.0, 255.0) as usize;
+            let n = (((t - scale_min) / range) * 255.0).clamp(0.0, 255.0) as usize;
             rgba_bytes.extend(&self.color_lut[n]);
         }
 
@@ -93,6 +108,8 @@ impl Renderer {
             max_temp,
             min_pos,
             max_pos,
+            scale_min,
+            scale_max,
         }
     }
 }

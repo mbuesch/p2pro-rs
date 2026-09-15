@@ -1,10 +1,10 @@
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
 std::compile_error!("p2pro-rs is only supported on Linux and Android platforms.");
 
-use crate::camera::Camera;
+use crate::{app::FromUi, camera::Camera};
 use std::{path::PathBuf, sync::Arc};
 use tokio::{
-    sync::{Mutex as AsyncMutex, mpsc},
+    sync::{Mutex as AsyncMutex, mpsc, watch},
     task,
 };
 
@@ -59,9 +59,12 @@ async fn main() {
     #[cfg(not(target_os = "android"))]
     let device_path = Args::parse().device;
 
-    let (tx, rx) = mpsc::channel(32);
+    let (to_ui_tx, to_ui_rx) = mpsc::channel(32);
+    let (from_ui_tx, from_ui_rx) = watch::channel(FromUi::default());
 
-    task::spawn(async move { Camera::capture_loop(device_path.as_deref(), tx).await });
+    task::spawn(
+        async move { Camera::capture_loop(device_path.as_deref(), to_ui_tx, from_ui_rx).await },
+    );
 
     #[cfg(target_os = "android")]
     let builder = dioxus::LaunchBuilder::mobile();
@@ -77,9 +80,12 @@ async fn main() {
     };
 
     tokio::task::unconstrained({
-        let rx = Arc::new(AsyncMutex::new(rx));
+        let to_ui_rx = Arc::new(AsyncMutex::new(to_ui_rx));
         async move {
-            builder.with_context(rx).launch(app::App);
+            builder
+                .with_context(to_ui_rx)
+                .with_context(from_ui_tx)
+                .launch(app::App);
         }
     })
     .await;

@@ -1,9 +1,12 @@
 //! Thermal camera capture: shared frame/state types, plus a platform-specific
 //! capture backend.
 
-use crate::render::{RenderedFrame, Renderer};
+use crate::{
+    app::FromUi,
+    render::{RenderedFrame, Renderer},
+};
 use std::path::Path;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 #[cfg(target_os = "linux")]
 mod v4l;
@@ -33,14 +36,18 @@ impl Camera {
     ///
     /// `device_path` (an explicit `/dev/videoX` path) is only meaningful on
     /// the V4L2 (Linux desktop) backend; it must be None on Android.
-    pub async fn capture_loop(device_path: Option<&Path>, to_ui: mpsc::Sender<CaptureState>) {
+    pub async fn capture_loop(
+        device_path: Option<&Path>,
+        to_ui: mpsc::Sender<CaptureState>,
+        from_ui: watch::Receiver<FromUi>,
+    ) {
         #[cfg(target_os = "linux")]
-        v4l::capture_loop(device_path, to_ui).await;
+        v4l::capture_loop(device_path, to_ui, from_ui).await;
 
         #[cfg(target_os = "android")]
         {
             assert!(device_path.is_none());
-            android::capture_loop(to_ui).await;
+            android::capture_loop(to_ui, from_ui).await;
         }
     }
 }
@@ -49,7 +56,12 @@ impl Camera {
 /// Full frame: Video half on top, thermal half on the bottom.
 ///
 /// `stride` is the number of bytes per row (>= `WIDTH * 2`).
-pub fn decode_frame(renderer: &mut Renderer, buf: &[u8], stride: usize) -> Option<RenderedFrame> {
+pub fn decode_frame(
+    renderer: &mut Renderer,
+    buf: &[u8],
+    stride: usize,
+    from_ui: &FromUi,
+) -> Option<RenderedFrame> {
     let half_height = HEIGHT as usize;
     let width = WIDTH as usize;
 
@@ -73,5 +85,5 @@ pub fn decode_frame(renderer: &mut Renderer, buf: &[u8], stride: usize) -> Optio
         }
     }
 
-    Some(renderer.build_frame(WIDTH, HEIGHT, &temps))
+    Some(renderer.build_frame(WIDTH, HEIGHT, &temps, from_ui))
 }

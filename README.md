@@ -8,6 +8,7 @@ Features:
 - A temperature color-scale legend next to the image.
 - Markers for the current frame's coldest and hottest pixels, with their temperature labels.
 - Automatic scaling: the color range always stretches to the current frame's min/max temperature.
+- Manual scaling: allows the user to set a fixed temperature range for the color mapping.
 - Saving of the thermal image to a PNG file.
 - Zoom and pan of the live thermal image.
 
@@ -108,7 +109,5 @@ Copyright (c) 2026 Michael Büsch
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 This program has initially been AI-derived from the p2pro-live Python application.
-
 Copyright of the original p2pro-live application:
-
 Copyright (c) 2024 Klaus Schwarzburg

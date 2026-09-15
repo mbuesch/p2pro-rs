@@ -6,14 +6,14 @@
 //! YUYV luma/chroma pair are instead a little-endian 16-bit raw sample.
 
 use super::{CaptureState, HEIGHT, WIDTH, decode_frame};
-use crate::render::Renderer;
+use crate::{app::FromUi, render::Renderer};
 use anyhow::{self as ah, Context as _, format_err as err};
 use std::{
     path::{Path, PathBuf},
     sync::Mutex,
     time::Duration,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use v4l::{
     Device, Format, FourCC,
     buffer::Type,
@@ -22,7 +22,10 @@ use v4l::{
     video::Capture,
 };
 
-async fn probe_devices(to_ui: mpsc::Sender<CaptureState>) -> ah::Result<(V4lDevice, PathBuf)> {
+async fn probe_devices(
+    to_ui: mpsc::Sender<CaptureState>,
+    from_ui: watch::Receiver<FromUi>,
+) -> ah::Result<(V4lDevice, PathBuf)> {
     println!("Probing for P2Pro device in /dev/video* ...");
     loop {
         let _ = to_ui
@@ -38,7 +41,7 @@ async fn probe_devices(to_ui: mpsc::Sender<CaptureState>) -> ah::Result<(V4lDevi
             let name = entry.file_name();
             if let Some(name) = name.to_str()
                 && name.starts_with("video")
-                && let Ok(camera) = V4lDevice::new(&entry.path(), to_ui.clone())
+                && let Ok(camera) = V4lDevice::new(&entry.path(), to_ui.clone(), from_ui.clone())
             {
                 println!("Found P2Pro device: {}", entry.path().display());
                 return Ok((camera, entry.path()));
@@ -56,10 +59,15 @@ struct V4lDevice {
     fmt: Format,
     to_ui: mpsc::Sender<CaptureState>,
     renderer: Mutex<Renderer>,
+    from_ui: watch::Receiver<FromUi>,
 }
 
 impl V4lDevice {
-    fn new(device_path: &Path, to_ui: mpsc::Sender<CaptureState>) -> ah::Result<Self> {
+    fn new(
+        device_path: &Path,
+        to_ui: mpsc::Sender<CaptureState>,
+        from_ui: watch::Receiver<FromUi>,
+    ) -> ah::Result<Self> {
         let device = Device::with_path(device_path)?;
 
         let caps = device.query_caps()?;
@@ -94,6 +102,7 @@ impl V4lDevice {
             fmt,
             to_ui,
             renderer: Mutex::new(Renderer::new()),
+            from_ui,
         })
     }
 
@@ -105,8 +114,9 @@ impl V4lDevice {
         loop {
             let (buf, _meta) = stream.next()?;
             let frame = {
+                let from_ui = self.from_ui.borrow().clone();
                 let mut renderer = self.renderer.lock().expect("Lock poisoned");
-                decode_frame(&mut renderer, buf, self.fmt.stride as usize)
+                decode_frame(&mut renderer, buf, self.fmt.stride as usize, &from_ui)
             };
             if let Some(frame) = frame {
                 let _ = self.to_ui.send(CaptureState::Frame(frame)).await;
@@ -117,11 +127,15 @@ impl V4lDevice {
 
 /// Runs forever: (re)connects to the camera and streams frames into `to_ui`,
 /// retrying on error (e.g. camera unplugged or not found yet).
-pub async fn capture_loop(device_path: Option<&Path>, to_ui: mpsc::Sender<CaptureState>) {
+pub async fn capture_loop(
+    device_path: Option<&Path>,
+    to_ui: mpsc::Sender<CaptureState>,
+    from_ui: watch::Receiver<FromUi>,
+) {
     loop {
         let camera = if let Some(device_path) = &device_path {
             // Open the specified device.
-            match V4lDevice::new(device_path, to_ui.clone()) {
+            match V4lDevice::new(device_path, to_ui.clone(), from_ui.clone()) {
                 Ok(c) => Some((c, device_path.to_path_buf())),
                 Err(e) => {
                     let _ = to_ui
@@ -136,7 +150,7 @@ pub async fn capture_loop(device_path: Option<&Path>, to_ui: mpsc::Sender<Captur
             }
         } else {
             // Try to find a P2Pro camera device.
-            match probe_devices(to_ui.clone()).await {
+            match probe_devices(to_ui.clone(), from_ui.clone()).await {
                 Ok(c) => Some(c),
                 Err(e) => {
                     let _ = to_ui

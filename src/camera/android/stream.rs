@@ -3,13 +3,14 @@
 
 use super::protocol::Negotiated;
 use crate::{
+    app::FromUi,
     camera::{CaptureState, HEIGHT, WIDTH, decode_frame},
     render::Renderer,
 };
 use anyhow::{self as ah, format_err as err};
 use rusb::{Context, DeviceHandle, TransferType, UsbContext, ffi};
 use std::{ffi::c_void, time::Duration};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 /// Full raw YUYV frame size: video half on top, thermal half on the bottom.
 const FRAME_BYTES: usize = WIDTH as usize * 2 * (HEIGHT as usize * 2);
@@ -22,11 +23,13 @@ pub fn run(
     handle: &DeviceHandle<Context>,
     negotiated: &Negotiated,
     to_ui: mpsc::Sender<CaptureState>,
+    from_ui: watch::Receiver<FromUi>,
 ) -> ah::Result<()> {
     let mut collector = Collector {
         reassembler: FrameReassembler::new(FRAME_BYTES),
         renderer: Renderer::new(),
         to_ui,
+        from_ui,
     };
 
     match negotiated.transfer_type {
@@ -43,13 +46,21 @@ struct Collector {
     reassembler: FrameReassembler,
     renderer: Renderer,
     to_ui: mpsc::Sender<CaptureState>,
+    from_ui: watch::Receiver<FromUi>,
 }
 
 impl Collector {
     fn feed_payload(&mut self, chunk: &[u8]) {
-        if let Some(frame_bytes) = self.reassembler.feed(chunk)
-            && let Some(frame) = decode_frame(&mut self.renderer, &frame_bytes, WIDTH as usize * 2)
-        {
+        let Some(frame_bytes) = self.reassembler.feed(chunk) else {
+            return;
+        };
+        let from_ui = self.from_ui.borrow().clone();
+        if let Some(frame) = decode_frame(
+            &mut self.renderer,
+            &frame_bytes,
+            WIDTH as usize * 2,
+            &from_ui,
+        ) {
             let _ = self.to_ui.blocking_send(CaptureState::Frame(frame));
         }
     }

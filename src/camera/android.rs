@@ -7,12 +7,12 @@ pub mod jni_bridge;
 mod protocol;
 mod stream;
 
-use super::CaptureState;
+use crate::{app::FromUi, camera::CaptureState};
 use anyhow::{self as ah, Context as _};
 use jni_bridge::{SessionGuard, UsbEvent};
 use rusb::UsbContext;
 use std::{collections::VecDeque, os::fd::RawFd, time::Duration};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 /// InfiRay P2Pro USB vendor/product ID.
 const VENDOR_ID: u16 = 0x0bda;
@@ -64,7 +64,7 @@ fn waiting_message(log: &DebugLog) -> String {
 }
 
 /// Main capture loop.
-pub async fn capture_loop(to_ui: mpsc::Sender<CaptureState>) {
+pub async fn capture_loop(to_ui: mpsc::Sender<CaptureState>, from_ui: watch::Receiver<FromUi>) {
     let mut log = DebugLog::new();
     loop {
         let _ = to_ui.send(CaptureState::Info(waiting_message(&log))).await;
@@ -85,7 +85,7 @@ pub async fn capture_loop(to_ui: mpsc::Sender<CaptureState>) {
                     continue;
                 }
                 let _ = to_ui.send(CaptureState::Info(waiting_message(&log))).await;
-                if let Err(e) = run_session(fd, token, to_ui.clone()).await {
+                if let Err(e) = run_session(fd, token, to_ui.clone(), from_ui.clone()).await {
                     log::error!("P2Pro USB session failed: {e:#}");
                     log.push(format!("Session error: {e:#}"));
                     let _ = to_ui
@@ -101,8 +101,14 @@ pub async fn capture_loop(to_ui: mpsc::Sender<CaptureState>) {
     }
 }
 
-async fn run_session(fd: RawFd, token: i64, to_ui: mpsc::Sender<CaptureState>) -> ah::Result<()> {
-    match tokio::task::spawn_blocking(move || run_session_blocking(fd, token, to_ui)).await {
+async fn run_session(
+    fd: RawFd,
+    token: i64,
+    to_ui: mpsc::Sender<CaptureState>,
+    from_ui: watch::Receiver<FromUi>,
+) -> ah::Result<()> {
+    let task = tokio::task::spawn_blocking(move || run_session_blocking(fd, token, to_ui, from_ui));
+    match task.await {
         Ok(result) => result,
         Err(join_err) => Err(ah::Error::new(join_err).context("USB capture thread panicked")),
     }
@@ -113,6 +119,7 @@ fn run_session_blocking(
     fd: RawFd,
     token: i64,
     to_ui: mpsc::Sender<CaptureState>,
+    from_ui: watch::Receiver<FromUi>,
 ) -> ah::Result<()> {
     let _session_guard = SessionGuard::new(token);
 
@@ -140,5 +147,5 @@ fn run_session_blocking(
         negotiated.transfer_type, negotiated.endpoint, negotiated.max_payload_transfer_size,
     )));
 
-    stream::run(&handle, &negotiated, to_ui)
+    stream::run(&handle, &negotiated, to_ui, from_ui)
 }

@@ -5,9 +5,16 @@
 use crate::{camera::CaptureState, colormap, render::RenderedFrame, save::save_frame_png};
 use dioxus::prelude::*;
 use std::sync::Arc;
-use tokio::sync::{Mutex as AsyncMutex, mpsc};
+use tokio::sync::{Mutex as AsyncMutex, mpsc, watch};
 
 const CSS: &str = include_str!("style.css");
+
+/// Settings sent from the UI to the capture thread.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FromUi {
+    pub min_temp: Option<f32>,
+    pub max_temp: Option<f32>,
+}
 
 #[component]
 pub fn App() -> Element {
@@ -88,6 +95,12 @@ struct GestureBaseline {
 #[component]
 fn ThermalView(frame: RenderedFrame, mut running: Signal<bool>) -> Element {
     let gradient = colormap::css_gradient();
+
+    let from_ui_tx = use_context::<watch::Sender<FromUi>>();
+    let mut fix_min = use_signal(|| false);
+    let mut fix_max = use_signal(|| false);
+    let mut min_text = use_signal(String::new);
+    let mut max_text = use_signal(String::new);
 
     let mut zoom = use_signal(|| MIN_ZOOM);
     let mut pan = use_signal(|| (0.0_f64, 0.0_f64));
@@ -243,6 +256,46 @@ fn ThermalView(frame: RenderedFrame, mut running: Signal<bool>) -> Element {
         }
     };
 
+    let cur_min_temp = frame.min_temp;
+    let cur_max_temp = frame.max_temp;
+
+    let on_fix_min = {
+        let tx = from_ui_tx.clone();
+        move |e: Event<FormData>| {
+            let on = e.checked();
+            fix_min.set(on);
+            if on && min_text().trim().is_empty() {
+                min_text.set(format!("{cur_min_temp:.1}"));
+            }
+            send_from_ui(&tx, (fix_min(), &min_text()), (fix_max(), &max_text()));
+        }
+    };
+    let on_min_input = {
+        let tx = from_ui_tx.clone();
+        move |e: Event<FormData>| {
+            min_text.set(e.value());
+            send_from_ui(&tx, (fix_min(), &min_text()), (fix_max(), &max_text()));
+        }
+    };
+    let on_fix_max = {
+        let tx = from_ui_tx.clone();
+        move |e: Event<FormData>| {
+            let on = e.checked();
+            fix_max.set(on);
+            if on && max_text().trim().is_empty() {
+                max_text.set(format!("{cur_max_temp:.1}"));
+            }
+            send_from_ui(&tx, (fix_min(), &min_text()), (fix_max(), &max_text()));
+        }
+    };
+    let on_max_input = {
+        let tx = from_ui_tx.clone();
+        move |e: Event<FormData>| {
+            max_text.set(e.value());
+            send_from_ui(&tx, (fix_min(), &min_text()), (fix_max(), &max_text()));
+        }
+    };
+
     let surface_style = format!(
         "width: {fit_w}px; height: {fit_h}px; margin-left: {}px; margin-top: {}px; transform: translate({}px, {}px) scale({current_zoom});",
         -fit_w / 2.0,
@@ -281,8 +334,48 @@ fn ThermalView(frame: RenderedFrame, mut running: Signal<bool>) -> Element {
                 div { class: "legend-main",
                     div { class: "legend-bar", style: "background: {gradient};" }
                     div { class: "legend-labels",
-                        span { "{frame.max_temp:.1}\u{00b0}C" }
-                        span { "{frame.min_temp:.1}\u{00b0}C" }
+                        span { "{frame.scale_max:.1}\u{00b0}C" }
+                        span { "{frame.scale_min:.1}\u{00b0}C" }
+                    }
+                }
+                div { class: "range-controls",
+                    div { class: "range-row",
+                        label { class: "range-toggle",
+                            input {
+                                r#type: "checkbox",
+                                checked: fix_min(),
+                                onchange: on_fix_min,
+                            }
+                            "Min"
+                        }
+                        input {
+                            class: "range-input",
+                            r#type: "number",
+                            step: "0.5",
+                            disabled: !fix_min(),
+                            value: "{min_text}",
+                            oninput: on_min_input,
+                        }
+                        span { class: "range-unit", "°C" }
+                    }
+                    div { class: "range-row",
+                        label { class: "range-toggle",
+                            input {
+                                r#type: "checkbox",
+                                checked: fix_max(),
+                                onchange: on_fix_max,
+                            }
+                            "Max"
+                        }
+                        input {
+                            class: "range-input",
+                            r#type: "number",
+                            step: "0.5",
+                            disabled: !fix_max(),
+                            value: "{max_text}",
+                            oninput: on_max_input,
+                        }
+                        span { class: "range-unit", "°C" }
                     }
                 }
                 div { class: "controls",
@@ -396,4 +489,19 @@ fn marker_screen_px(
     let abs_x = center.0 - img_w / 2.0 + nx * img_w;
     let abs_y = center.1 - img_h / 2.0 + ny * img_h;
     (abs_x - wrap_origin.0, abs_y - wrap_origin.1)
+}
+
+/// Parses a temperature text field.
+/// Accepts both "." and "," decimals.
+/// Empty or invalid text counts as "no manual limit" (auto-scaling).
+fn parse_temp(text: &str) -> Option<f32> {
+    text.trim().replace(',', ".").parse().ok()
+}
+
+/// Sends the current state of the manual-range widgets to the capture thread.
+fn send_from_ui(from_ui_tx: &watch::Sender<FromUi>, min: (bool, &str), max: (bool, &str)) {
+    let _ = from_ui_tx.send(FromUi {
+        min_temp: if min.0 { parse_temp(min.1) } else { None },
+        max_temp: if max.0 { parse_temp(max.1) } else { None },
+    });
 }
