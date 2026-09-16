@@ -59,6 +59,8 @@ jobs:
       - name: Install clippy
         if: matrix.toolchain.name == 'stable'
         run: rustup component add clippy
+      - name: Install dioxus-cli
+        run: cargo install --locked dioxus-cli
 
       # Install Android SDK
       - uses: actions/setup-java@v5
@@ -119,9 +121,6 @@ jobs:
         run: ./desktop-build-linux.sh
 
       # Build (Android app)
-      - name: Install dioxus-cli
-        if: matrix.toolchain.name == 'stable'
-        run: cargo install --locked dioxus-cli
       - name: Build Android
         if: matrix.toolchain.name == 'stable'
         env:
