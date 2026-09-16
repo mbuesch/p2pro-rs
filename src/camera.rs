@@ -8,11 +8,13 @@ use crate::{
 use std::path::Path;
 use tokio::sync::{mpsc, watch};
 
-#[cfg(target_os = "linux")]
-mod v4l;
-
 #[cfg(target_os = "android")]
 pub mod android;
+
+mod dummy;
+
+#[cfg(target_os = "linux")]
+mod v4l;
 
 /// Width of both the video and thermal half, in pixels.
 pub const WIDTH: u32 = 256;
@@ -36,18 +38,26 @@ impl Camera {
     ///
     /// `device_path` (an explicit `/dev/videoX` path) is only meaningful on
     /// the V4L2 (Linux desktop) backend; it must be None on Android.
+    ///
+    /// When `demo` is true, no hardware is used: the dummy backend generates
+    /// an animated test picture instead.
     pub async fn capture_loop(
         device_path: Option<&Path>,
+        demo: bool,
         to_ui: mpsc::Sender<CaptureState>,
         from_ui: watch::Receiver<FromUi>,
     ) {
-        #[cfg(target_os = "linux")]
-        v4l::capture_loop(device_path, to_ui, from_ui).await;
+        if demo {
+            dummy::capture_loop(to_ui, from_ui).await;
+        } else {
+            #[cfg(target_os = "linux")]
+            v4l::capture_loop(device_path, to_ui, from_ui).await;
 
-        #[cfg(target_os = "android")]
-        {
-            assert!(device_path.is_none());
-            android::capture_loop(to_ui, from_ui).await;
+            #[cfg(target_os = "android")]
+            {
+                assert!(device_path.is_none());
+                android::capture_loop(to_ui, from_ui).await;
+            }
         }
     }
 }

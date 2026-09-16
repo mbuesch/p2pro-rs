@@ -48,6 +48,10 @@ struct Args {
     /// If not specified, all existing /dev/video* devices will be probed
     /// and the first found P2Pro device will be used.
     device: Option<PathBuf>,
+
+    /// Generate an animated test picture instead of using a real hardware camera.
+    #[arg(long, short = 'd')]
+    demo: bool,
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
@@ -55,16 +59,19 @@ async fn main() {
     init_logging();
 
     #[cfg(target_os = "android")]
-    let device_path: Option<PathBuf> = None;
+    let (device_path, demo): (Option<PathBuf>, bool) = (None, false);
     #[cfg(not(target_os = "android"))]
-    let device_path = Args::parse().device;
+    let (device_path, demo) = {
+        let args = Args::parse();
+        (args.device, args.demo)
+    };
 
     let (to_ui_tx, to_ui_rx) = mpsc::channel(32);
     let (from_ui_tx, from_ui_rx) = watch::channel(FromUi::default());
 
-    task::spawn(
-        async move { Camera::capture_loop(device_path.as_deref(), to_ui_tx, from_ui_rx).await },
-    );
+    task::spawn(async move {
+        Camera::capture_loop(device_path.as_deref(), demo, to_ui_tx, from_ui_rx).await
+    });
 
     #[cfg(target_os = "android")]
     let builder = dioxus::LaunchBuilder::mobile();

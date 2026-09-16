@@ -49,6 +49,12 @@ If you want to specify a particular device, you can pass it as the first argumen
 ./p2pro-rs-desktop-linux-x64 /dev/video2
 ```
 
+For testing without a camera attached, the `--demo` option enables a dummy camera that generates an animated test picture:
+
+```sh
+./p2pro-rs-desktop-linux-x64 --demo
+```
+
 There is no need to install the app.
 You can just copy the p2pro-rs binary to a convenient location and run it from there.
 
