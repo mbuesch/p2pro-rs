@@ -109,14 +109,14 @@ jobs:
         if: matrix.toolchain.name == 'stable'
         run: cargo fmt --all --check
 
-      # Build (Linux Desktop)
-      - name: Build
-        run: cargo build
-
       # Clippy
       - name: Clippy
         if: matrix.toolchain.name == 'stable'
         run: cargo clippy --all -- -D warnings
+
+      # Build (Linux Desktop)
+      - name: Build
+        run: ./desktop-build-linux.sh
 
       # Build (Android app)
       - name: Install dioxus-cli

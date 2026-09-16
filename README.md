@@ -15,7 +15,7 @@ Features:
 ## Operating System Support
 
 - **Linux**
-- **Android**
+- **Android** (9 or later)
 
 ## How it talks to the camera
 
@@ -29,16 +29,16 @@ How that YUYV stream is obtained depends on the platform:
 
 ## Running on Linux
 
-First install [Rust](https://www.rust-lang.org/tools/install) and then build the app with cargo:
+First install [Rust](https://www.rust-lang.org/tools/install) and then build the app:
 
 ```sh
-cargo build --release
+desktop-build-linux.sh
 ```
 
 Then run the built executable:
 
 ```sh
-./target/release/p2pro-rs
+./p2pro-rs-desktop-linux-x64
 ```
 
 The app will probe `/dev/video*` for a P2Pro camera and open the first one it finds.
@@ -46,11 +46,17 @@ The app will probe `/dev/video*` for a P2Pro camera and open the first one it fi
 If you want to specify a particular device, you can pass it as the first argument:
 
 ```sh
-./target/release/p2pro-rs /dev/video2
+./p2pro-rs-desktop-linux-x64 /dev/video2
 ```
 
 There is no need to install the app.
-You can just copy the `p2pro-rs` binary to a convenient location and run it from there.
+You can just copy the p2pro-rs binary to a convenient location and run it from there.
+
+But if you want to install it to `/opt`, you can do it with:
+
+```sh
+./desktop-install-linux.sh
+```
 
 ## Running on Android
 
