@@ -6,4 +6,5 @@
 -keepclassmembers class dev.dioxus.main.MainActivity {
     public static void saveFileBytes(java.lang.String, byte[]);
     public static void onNativeUsbSessionEnded(long);
+    public static void requestVideoFile(java.lang.String);
 }

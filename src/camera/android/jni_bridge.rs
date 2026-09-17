@@ -1,4 +1,4 @@
-use anyhow::{self as ah, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 use jni::{
     Env, EnvUnowned, JavaVM,
     errors::ThrowRuntimeExAndDefault,
@@ -8,9 +8,9 @@ use jni::{
 };
 use std::{
     os::fd::RawFd,
-    sync::{LazyLock, OnceLock},
+    sync::{LazyLock, Mutex as StdMutex, OnceLock},
 };
-use tokio::sync::{Mutex as AsyncMutex, mpsc};
+use tokio::sync::{Mutex as AsyncMutex, mpsc, oneshot};
 
 /// An event handed over from the Android `MainActivity`.
 pub enum UsbEvent {
@@ -119,6 +119,46 @@ pub async fn save_file(filename: &str, bytes: &[u8]) -> ah::Result<()> {
     })
 }
 
+/// A pending video-file pick: the Kotlin side delivers the result fd here.
+static VIDEO_PICK: StdMutex<Option<oneshot::Sender<i32>>> = StdMutex::new(None);
+
+/// Opens the Android SAF "create document" dialog for the video recording.
+///
+/// Returns the writable (and seekable) file descriptor of the picked
+/// document, or `None` if the user cancelled.
+pub async fn pick_video_file(filename: &str) -> ah::Result<Option<RawFd>> {
+    let (tx, rx) = oneshot::channel();
+    *VIDEO_PICK.lock().expect("Lock poisoned") = Some(tx);
+
+    let call = (|| -> ah::Result<()> {
+        let jvm = JVM.get().context("JVM not initialized")?;
+        let cls = MAIN_ACTIVITY_CLASS
+            .get()
+            .context("MainActivity class not cached yet")?;
+        jvm.attach_current_thread(|env| -> ah::Result<()> {
+            let filename_jstring = env.new_string(filename)?;
+            let args = [JValue::Object(&filename_jstring)];
+            env.call_static_method(
+                cls,
+                jni_str!("requestVideoFile"),
+                jni_sig!((filename: java.lang.String) -> void),
+                &args,
+            )?;
+            Ok(())
+        })
+    })();
+    if let Err(e) = call {
+        VIDEO_PICK.lock().expect("Lock poisoned").take();
+        return Err(e);
+    }
+
+    match rx.await {
+        Ok(fd) if fd >= 0 => Ok(Some(fd)),
+        Ok(_) => Ok(None),
+        Err(_) => Err(err!("Video file picker closed unexpectedly")),
+    }
+}
+
 pub async fn next_event() -> UsbEvent {
     EVENT_CHANNEL
         .rx
@@ -156,6 +196,37 @@ pub extern "system" fn Java_dev_dioxus_main_MainActivity_nativeUsbDeviceReady<'a
             token,
         )) {
             eprintln!("Failed to send USB device ready event: {:?}", e);
+        }
+        Ok(())
+    })
+    .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// Called from Kotlin (`MainActivity.nativeVideoFileReady`) when the SAF
+/// "create document" dialog for the video recording has closed. `fd` is a
+/// detached, writable file descriptor for the picked document, or -1 if the
+/// user cancelled.
+///
+/// Java signature: `private external fun nativeVideoFileReady(fd: Int)`
+/// on `dev.dioxus.main.MainActivity`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_dioxus_main_MainActivity_nativeVideoFileReady<'a>(
+    mut env: EnvUnowned<'a>,
+    _this: JObject<'a>,
+    fd: i32,
+) {
+    env.with_env(|env| -> Result<_, jni::errors::Error> {
+        if let Ok(jvm) = env.get_java_vm() {
+            let _ = JVM.set(jvm);
+        }
+        cache_main_activity_class(env);
+        let tx = VIDEO_PICK.lock().expect("Lock poisoned").take();
+        if let Some(tx) = tx {
+            let _ = tx.send(fd);
+        } else if fd >= 0 {
+            // No waiting picker (the request was aborted);
+            // don't leak the descriptor.
+            unsafe { libc::close(fd) };
         }
         Ok(())
     })

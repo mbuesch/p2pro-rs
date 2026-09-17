@@ -2,7 +2,13 @@
 //! and a color-scale legend. See `camera.rs` for the capture thread that
 //! feeds this UI through shared state.
 
-use crate::{camera::CaptureState, colormap, render::RenderedFrame, save::save_frame_png};
+use crate::{
+    camera::CaptureState,
+    colormap,
+    render::RenderedFrame,
+    save::{pick_video_target, save_frame_png},
+    video::{VideoEvent, VideoRecorder},
+};
 use dioxus::prelude::*;
 use std::sync::Arc;
 use tokio::sync::{Mutex as AsyncMutex, mpsc, watch};
@@ -19,12 +25,16 @@ pub struct FromUi {
 #[component]
 pub fn App() -> Element {
     let from_cam = use_context::<Arc<AsyncMutex<mpsc::Receiver<CaptureState>>>>();
+    let recorder = use_context::<VideoRecorder>();
     let mut state = use_signal(|| CaptureState::Connecting);
     let running = use_signal(|| true);
 
-    // Long-lived background task:
-    // Waits on the capture thread's `mpsc` channel and re-renders the UI as soon as it changes.
+    let video_name = use_signal(|| None::<String>);
+    let mut video_err = use_signal(|| None::<String>);
+    let mut video_recording = use_signal(|| false);
+
     use_hook(|| {
+        let recorder = recorder.clone();
         spawn(async move {
             let mut from_cam = from_cam.lock().await;
             loop {
@@ -32,10 +42,32 @@ pub fn App() -> Element {
                     eprintln!("Error: Capture thread has exited");
                     break;
                 };
-                if !running() && matches!(snapshot, CaptureState::Frame(_)) {
-                    continue; // While stopped, drop incoming frames.
+                if let CaptureState::Frame(frame) = &snapshot {
+                    if !running() {
+                        continue; // While stopped, drop incoming frames.
+                    }
+                    // Push to frame recorder.
+                    recorder.push_frame(frame.width, frame.height, frame.rgba_bytes.clone());
                 }
+                // To live-view.
                 state.set(snapshot);
+            }
+        })
+    });
+
+    use_hook(|| {
+        let recorder = recorder.clone();
+        spawn(async move {
+            while let Some(event) = recorder.next_event().await {
+                match event {
+                    VideoEvent::Stopped { frames: _ } => {
+                        video_recording.set(false);
+                    }
+                    VideoEvent::Error(msg) => {
+                        video_recording.set(false);
+                        video_err.set(Some(msg));
+                    }
+                }
             }
         })
     });
@@ -63,7 +95,14 @@ pub fn App() -> Element {
                     }
                 }
                 CaptureState::Frame(frame) => rsx! {
-                    ThermalView { frame, running }
+                    ThermalView {
+                        frame,
+                        running,
+                        recorder: recorder.clone(),
+                        video_name,
+                        video_err,
+                        video_recording,
+                    }
                 },
             }
         }
@@ -93,7 +132,14 @@ struct GestureBaseline {
 }
 
 #[component]
-fn ThermalView(frame: RenderedFrame, mut running: Signal<bool>) -> Element {
+fn ThermalView(
+    frame: RenderedFrame,
+    mut running: Signal<bool>,
+    recorder: VideoRecorder,
+    mut video_name: Signal<Option<String>>,
+    mut video_err: Signal<Option<String>>,
+    mut video_recording: Signal<bool>,
+) -> Element {
     let gradient = colormap::css_gradient();
 
     let from_ui_tx = use_context::<watch::Sender<FromUi>>();
@@ -246,13 +292,33 @@ fn ThermalView(frame: RenderedFrame, mut running: Signal<bool>) -> Element {
     };
 
     let onstartstop = move |_| running.set(!running());
-    let onsave = {
+    let onsavepic = {
         let frame = frame.clone();
         move |_| {
             let frame = frame.clone();
             spawn(async move {
                 save_frame_png(&frame).await;
             });
+        }
+    };
+
+    let onsavevid = {
+        let recorder = recorder.clone();
+        move |_| {
+            if video_recording() {
+                video_recording.set(false);
+                recorder.stop();
+            } else {
+                let recorder = recorder.clone();
+                spawn(async move {
+                    if let Some((name, target)) = pick_video_target().await {
+                        recorder.start(target);
+                        video_name.set(Some(name));
+                        video_recording.set(true);
+                        video_err.set(None);
+                    }
+                });
+            }
         }
     };
 
@@ -381,12 +447,33 @@ fn ThermalView(frame: RenderedFrame, mut running: Signal<bool>) -> Element {
                 div { class: "controls",
                     button { class: "control-btn", onclick: onstartstop,
                         if running() {
-                            "Stop"
+                            "Stop cam"
                         } else {
-                            "Start"
+                            "Start cam"
                         }
                     }
-                    button { class: "control-btn", onclick: onsave, "Save" }
+                    button { class: "control-btn", onclick: onsavepic, "Save pic" }
+                    button {
+                        class: if video_recording() { if running() { "control-btn rec rec-active" } else { "control-btn rec rec-paused" } } else { "control-btn" },
+                        onclick: onsavevid,
+                        if video_recording() {
+                            if running() {
+                                "\u{25a0} Stop"
+                            } else {
+                                "\u{25a0} Stop (paused)"
+                            }
+                        } else {
+                            "Save vid"
+                        }
+                    }
+                    if video_recording() {
+                        if let Some(name) = video_name() {
+                            div { class: "video-file", title: "{name}", "{name}" }
+                        }
+                    }
+                    if let Some(err) = video_err() {
+                        p { class: "status error", "{err}" }
+                    }
                 }
             }
         }

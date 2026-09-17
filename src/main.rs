@@ -1,7 +1,7 @@
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
 std::compile_error!("p2pro-rs is only supported on Linux and Android platforms.");
 
-use crate::{app::FromUi, camera::Camera};
+use p2pro_rs::{Camera, FromUi, video::VideoRecorder};
 use std::{path::PathBuf, sync::Arc};
 use tokio::{
     sync::{Mutex as AsyncMutex, mpsc, watch},
@@ -12,12 +12,6 @@ use tokio::{
 use clap::Parser;
 #[cfg(not(target_os = "android"))]
 use dioxus::desktop::{Config, WindowBuilder};
-
-mod app;
-mod camera;
-mod colormap;
-mod render;
-mod save;
 
 #[cfg(not(target_os = "android"))]
 fn load_window_icon() -> Option<dioxus::desktop::tao::window::Icon> {
@@ -68,6 +62,7 @@ async fn main() {
 
     let (to_ui_tx, to_ui_rx) = mpsc::channel(32);
     let (from_ui_tx, from_ui_rx) = watch::channel(FromUi::default());
+    let recorder = VideoRecorder::new();
 
     task::spawn(async move {
         Camera::capture_loop(device_path.as_deref(), demo, to_ui_tx, from_ui_rx).await
@@ -88,12 +83,17 @@ async fn main() {
 
     tokio::task::unconstrained({
         let to_ui_rx = Arc::new(AsyncMutex::new(to_ui_rx));
+        let recorder = recorder.clone();
         async move {
             builder
                 .with_context(to_ui_rx)
                 .with_context(from_ui_tx)
-                .launch(app::App);
+                .with_context(recorder)
+                .launch(p2pro_rs::App);
         }
     })
     .await;
+
+    // Window closed: finalize any ongoing recording and join the writer.
+    recorder.shutdown();
 }

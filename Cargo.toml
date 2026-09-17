@@ -18,6 +18,9 @@ chrono = "0.4"
 curveipo = { version = "1", features = [ "fastfloat" ] }
 image = { version = "0.25", default-features = false, features = [ "png" ] }
 movavg = "3"
+oxideav-avi = "0.0.10"
+oxideav-core = "0.1"
+oxideav-huffyuv = "0.0.3"
 tokio = { version = "1", default-features = false, features = [ "sync", "fs", "rt-multi-thread" ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]

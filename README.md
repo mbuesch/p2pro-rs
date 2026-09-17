@@ -9,8 +9,9 @@ Features:
 - Markers for the current frame's coldest and hottest pixels, with their temperature labels.
 - Automatic scaling: the color range always stretches to the current frame's min/max temperature.
 - Manual scaling: allows the user to set a fixed temperature range for the color mapping.
-- Saving of the thermal image to a PNG file.
 - Zoom and pan of the live thermal image.
+- Saving of the thermal image to a PNG file.
+- Recording of the thermal video to an AVI video file.
 
 ## Operating System Support
 
@@ -110,6 +111,27 @@ Plug in your Android device, ensure Developer Mode, USB debugging and Sideloadin
 
 ```sh
 ./android-install.sh
+```
+
+## Video format
+
+The application always records to lossless HuffYUV AVI format.
+This creates rather large video files compared to lossy formats, but preserves the full quality of the thermal video.
+
+If you want to reduce file size and re-encode the video to a lossy format, you can use video editing or conversion tools such as FFmpeg:
+
+```sh
+# H.264 (MP4) - most compatible, great quality/size
+ffmpeg -i input.avi -c:v libx264 -crf 18 -preset slow -c:a aac -b:a 192k output.mp4
+
+# H.265/HEVC (MP4) - better compression than H.264 at same quality
+ffmpeg -i input.avi -c:v libx265 -crf 20 -preset slow -c:a aac -b:a 192k output.mp4
+
+# VP9 (WebM) - royalty-free, good for web
+ffmpeg -i input.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus -b:a 160k output.webm
+
+# AV1 (MP4/WebM) — best compression, but slowest to encode
+ffmpeg -i input.avi -c:v libsvtav1 -crf 30 -preset 6 -c:a libopus -b:a 160k output.mp4
 ```
 
 ## License

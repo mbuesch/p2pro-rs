@@ -160,6 +160,7 @@ h1 {
 
 .control-btn {
     width: 100%;
+    min-height: 40px;
     padding: 8px 10px;
     font-size: 13px;
     font-weight: 600;
@@ -176,6 +177,33 @@ h1 {
 
 .control-btn:active {
     background: #3d424a;
+}
+
+.control-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.control-btn.rec.rec-active {
+    background: #5a1f1f;
+    border-color: #c0392b;
+    color: #ffb3ab;
+}
+
+.control-btn.rec.rec-paused {
+    background: #4a3a1a;
+    border-color: #b8892d;
+    color: #ffd894;
+}
+
+.video-file {
+    font-size: 11px;
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 130px;
+    text-align: center;
 }
 
 .range-controls {

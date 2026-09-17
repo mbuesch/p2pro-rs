@@ -37,6 +37,7 @@ class MainActivity : WryActivity() {
     private var pendingOpenDevice: UsbDevice? = null
     private var sessionToken: Long = 0L
     private var pendingSaveBytes: ByteArray? = null
+    private var videoPickPending: Boolean = false
 
     private val cameraPermissionLauncher: ActivityResultLauncher<String> =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -68,6 +69,25 @@ class MainActivity : WryActivity() {
                 } ?: throw IllegalStateException("openOutputStream returned null")
             } catch (e: Exception) {
             }
+        }
+
+    private val videoLauncher: ActivityResultLauncher<String> =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("video/x-msvideo")) { uri ->
+            videoPickPending = false
+            // The native AVI writer needs a seekable descriptor (the trailer
+            // back-patches the header), so hand over a detached fd instead of
+            // a plain OutputStream. -1 signals cancellation/failure to Rust.
+            val fd = if (uri != null) {
+                try {
+                    contentResolver.openFileDescriptor(uri, "w")?.detachFd() ?: -1
+                } catch (e: Exception) {
+                    Log.e(TAG, "openFileDescriptor for video failed: $e")
+                    -1
+                }
+            } else {
+                -1
+            }
+            nativeVideoFileReady(fd)
         }
 
     private fun hasCameraPermission(): Boolean =
@@ -307,6 +327,9 @@ class MainActivity : WryActivity() {
     /** Implemented in Rust, see src/camera/android/jni_bridge.rs. */
     private external fun nativeUsbLog(msg: String)
 
+    /** Implemented in Rust, see src/camera/android/jni_bridge.rs. */
+    private external fun nativeVideoFileReady(fd: Int)
+
     companion object {
         const val TAG = "P2ProUsb"
         const val ACTION_USB_PERMISSION = "dev.dioxus.main.USB_PERMISSION"
@@ -324,6 +347,19 @@ class MainActivity : WryActivity() {
                 activity.pendingSaveBytes = bytes
                 activity.runOnUiThread {
                     activity.saveLauncher.launch(filename)
+                }
+            }
+        }
+
+        /** Called from Rust to open the video "create document" dialog. */
+        @JvmStatic
+        fun requestVideoFile(filename: String) {
+            val activity = currentActivity?.get()
+                ?: throw IllegalStateException("Activity not available")
+            if (!activity.videoPickPending) {
+                activity.videoPickPending = true
+                activity.runOnUiThread {
+                    activity.videoLauncher.launch(filename)
                 }
             }
         }

@@ -3068,6 +3068,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
+name = "oxideav-avi"
+version = "0.0.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f47398d7debe2af6d69dd1f529bf70a6bf426326bdcffd22d386126997ac48a"
+dependencies = [
+ "oxideav-core",
+]
+
+[[package]]
+name = "oxideav-core"
+version = "0.1.36"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a78b502f679c580ceb7cc834d23f80821673b0a393a3083d54ef82668bb9c028"
+dependencies = [
+ "bytemuck",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "oxideav-huffyuv"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4d54cbea4a5140b2400a4c80e1602f4eaffb653aac09a2367705e272964e430"
+dependencies = [
+ "oxideav-core",
+]
+
+[[package]]
 name = "p2pro-rs"
 version = "1.0.0"
 dependencies = [
@@ -3083,6 +3112,9 @@ dependencies = [
  "libc",
  "log",
  "movavg",
+ "oxideav-avi",
+ "oxideav-core",
+ "oxideav-huffyuv",
  "rfd",
  "rusb",
  "tokio",
