@@ -2,6 +2,8 @@
 
 A minimal InfiRay P2Pro thermal camera viewer.
 
+![P2Pro-rs screenshot](assets/screenshot.png)
+
 Features:
 
 - Live false-color ("ironbow"-style) view of the InfiRay P2Pro thermal camera.
