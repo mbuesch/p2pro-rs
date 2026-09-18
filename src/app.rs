@@ -28,8 +28,6 @@ pub fn App() -> Element {
     let recorder = use_context::<VideoRecorder>();
     let mut state = use_signal(|| CaptureState::Connecting);
     let running = use_signal(|| true);
-
-    let video_name = use_signal(|| None::<String>);
     let mut video_err = use_signal(|| None::<String>);
     let mut video_recording = use_signal(|| false);
 
@@ -99,7 +97,6 @@ pub fn App() -> Element {
                         frame,
                         running,
                         recorder: recorder.clone(),
-                        video_name,
                         video_err,
                         video_recording,
                     }
@@ -136,7 +133,6 @@ fn ThermalView(
     frame: RenderedFrame,
     mut running: Signal<bool>,
     recorder: VideoRecorder,
-    mut video_name: Signal<Option<String>>,
     mut video_err: Signal<Option<String>>,
     mut video_recording: Signal<bool>,
 ) -> Element {
@@ -311,9 +307,8 @@ fn ThermalView(
             } else {
                 let recorder = recorder.clone();
                 spawn(async move {
-                    if let Some((name, target)) = pick_video_target().await {
+                    if let Some(target) = pick_video_target().await {
                         recorder.start(target);
-                        video_name.set(Some(name));
                         video_recording.set(true);
                         video_err.set(None);
                     }
@@ -464,11 +459,6 @@ fn ThermalView(
                             }
                         } else {
                             "Save vid"
-                        }
-                    }
-                    if video_recording() {
-                        if let Some(name) = video_name() {
-                            div { class: "video-file", title: "{name}", "{name}" }
                         }
                     }
                     if let Some(err) = video_err() {

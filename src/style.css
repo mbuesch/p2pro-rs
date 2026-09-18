@@ -196,16 +196,6 @@ h1 {
     color: #ffd894;
 }
 
-.video-file {
-    font-size: 11px;
-    opacity: 0.7;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 130px;
-    text-align: center;
-}
-
 .range-controls {
     display: flex;
     flex: 0 0 auto;

@@ -59,29 +59,25 @@ pub async fn save_frame_png(frame: &RenderedFrame) {
 /// user cancelled. The target is only materialized (created/truncated) once
 /// the recording actually starts.
 #[cfg(target_os = "linux")]
-pub async fn pick_video_target() -> Option<(String, VideoTarget)> {
+pub async fn pick_video_target() -> Option<VideoTarget> {
     let file = rfd::AsyncFileDialog::new()
         .set_title("Save P2Pro video")
         .set_file_name(make_video_filename())
         .add_filter("AVI video", &["avi"])
         .save_file()
         .await?;
-    Some((
-        file.file_name(),
-        VideoTarget::Path(file.path().to_path_buf()),
-    ))
+    Some(VideoTarget::Path(file.path().to_path_buf()))
 }
 
 /// Opens the Android SAF "create document" picker for the video file.
 /// The returned file is a seekable write descriptor (the AVI trailer
 /// back-patches the header), owned by the recorder from here on.
 #[cfg(target_os = "android")]
-pub async fn pick_video_target() -> Option<(String, VideoTarget)> {
+pub async fn pick_video_target() -> Option<VideoTarget> {
     use crate::camera::android::jni_bridge::pick_video_file;
     use std::os::fd::FromRawFd;
-    let name = make_video_filename();
-    let fd = pick_video_file(&name).await.ok()??;
+    let fd = pick_video_file(&make_video_filename()).await.ok()??;
     // SAFETY: the activity handed us a freshly opened, detached fd.
     let file = unsafe { std::fs::File::from_raw_fd(fd) };
-    Some((name, VideoTarget::File(file)))
+    Some(VideoTarget::File(file))
 }
