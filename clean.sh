@@ -12,4 +12,5 @@ rm -f p2pro-rs-aarch64-release.apk.idsig
 rm -f p2pro-rs-aarch64-unsigned.aab
 rm -f p2pro-rs-aarch64.aab
 rm -f p2pro-rs-aarch64-release.aab
+rm -f p2pro-rs-desktop-linux-x64
 cargo clean
