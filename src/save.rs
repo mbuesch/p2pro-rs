@@ -22,9 +22,9 @@ fn encode_save_file_png(frame: &RenderedFrame) -> Vec<u8> {
     let mut png_bytes = Vec::with_capacity(1024 * 512);
     PngEncoder::new_with_quality(&mut png_bytes, CompressionType::Best, FilterType::Adaptive)
         .write_image(
-            &frame.rgba_bytes,
-            frame.width,
-            frame.height,
+            &frame.rgba.bytes,
+            frame.meta.width,
+            frame.meta.height,
             ExtendedColorType::Rgba8,
         )
         .expect("encoding a thermal frame to PNG should never fail");

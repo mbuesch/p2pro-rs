@@ -5,7 +5,7 @@
 use crate::{
     camera::CaptureState,
     colormap,
-    render::RenderedFrame,
+    render::{RenderedFrame, RenderedFrameMeta},
     save::{pick_video_target, save_frame_png},
     video::{VideoEvent, VideoRecorder},
 };
@@ -47,7 +47,7 @@ pub fn App() -> Element {
                         continue; // While stopped, drop incoming frames.
                     }
                     // Push to frame recorder.
-                    recorder.push_frame(frame.width, frame.height, frame.rgba_bytes.clone());
+                    recorder.push_frame(frame);
                 }
                 // To live-view.
                 state.set(snapshot);
@@ -187,14 +187,14 @@ fn ThermalView(
     // Largest size (in CSS px) that fits the frame's aspect ratio
     // inside the measured wrap (zoom == 1.0).
     let (fit_w, fit_h) = if ww > 0.0 && wh > 0.0 {
-        let ar = frame.width as f64 / frame.height as f64;
+        let ar = frame.meta.width as f64 / frame.meta.height as f64;
         if ww / wh > ar {
             (wh * ar, wh)
         } else {
             (ww, ww / ar)
         }
     } else {
-        (frame.width as f64, frame.height as f64)
+        (frame.meta.width as f64, frame.meta.height as f64)
     };
 
     let current_zoom = zoom();
@@ -206,8 +206,8 @@ fn ThermalView(
     let fit_size = (fit_w, fit_h);
     let wrap_origin = (wl, wt);
     let (min_left, min_top) = marker_screen_px(
-        frame.min_pos,
-        &frame,
+        frame.meta.min_pos,
+        &frame.meta,
         box_center,
         current_pan,
         current_zoom,
@@ -215,8 +215,8 @@ fn ThermalView(
         wrap_origin,
     );
     let (max_left, max_top) = marker_screen_px(
-        frame.max_pos,
-        &frame,
+        frame.meta.max_pos,
+        &frame.meta,
         box_center,
         current_pan,
         current_zoom,
@@ -322,8 +322,8 @@ fn ThermalView(
         }
     };
 
-    let cur_min_temp = frame.min_temp;
-    let cur_max_temp = frame.max_temp;
+    let cur_min_temp = frame.meta.min_temp;
+    let cur_max_temp = frame.meta.max_temp;
 
     let on_fix_min = {
         let tx = from_ui_tx.clone();
@@ -381,27 +381,27 @@ fn ThermalView(
                 onpointercancel,
                 onwheel,
                 div { class: "image-surface", style: "{surface_style}",
-                    img { class: "thermal-img", src: "{frame.png_uri}" }
+                    img { class: "thermal-img", src: "{frame.uri.png_uri}" }
                 }
                 div {
                     class: "marker marker-min",
                     style: "left: {min_left}px; top: {min_top}px;",
                     span { class: "dot" }
-                    span { class: "label", "{frame.min_temp:.1}\u{00b0}C" }
+                    span { class: "label", "{frame.meta.min_temp:.1}\u{00b0}C" }
                 }
                 div {
                     class: "marker marker-max",
                     style: "left: {max_left}px; top: {max_top}px;",
                     span { class: "dot" }
-                    span { class: "label", "{frame.max_temp:.1}\u{00b0}C" }
+                    span { class: "label", "{frame.meta.max_temp:.1}\u{00b0}C" }
                 }
             }
             div { class: "legend",
                 div { class: "legend-main",
                     div { class: "legend-bar", style: "background: {gradient};" }
                     div { class: "legend-labels",
-                        span { "{frame.scale_max:.1}\u{00b0}C" }
-                        span { "{frame.scale_min:.1}\u{00b0}C" }
+                        span { "{frame.meta.scale_max:.1}\u{00b0}C" }
+                        span { "{frame.meta.scale_min:.1}\u{00b0}C" }
                     }
                 }
                 div { class: "range-controls",
@@ -553,22 +553,22 @@ fn clamp_pan(
 /// position in `image-wrap` px, accounting for the current zoom and pan.
 fn marker_screen_px(
     pos: (u32, u32),
-    frame: &RenderedFrame,
+    frame_meta: &RenderedFrameMeta,
     box_center: (f64, f64),
     pan: (f64, f64),
     zoom: f64,
     fit_size: (f64, f64),
     wrap_origin: (f64, f64),
 ) -> (f64, f64) {
-    let nx = if frame.width <= 1 {
+    let nx = if frame_meta.width <= 1 {
         0.0
     } else {
-        pos.0 as f64 / (frame.width - 1) as f64
+        pos.0 as f64 / (frame_meta.width - 1) as f64
     };
-    let ny = if frame.height <= 1 {
+    let ny = if frame_meta.height <= 1 {
         0.0
     } else {
-        pos.1 as f64 / (frame.height - 1) as f64
+        pos.1 as f64 / (frame_meta.height - 1) as f64
     };
     let img_w = fit_size.0 * zoom;
     let img_h = fit_size.1 * zoom;

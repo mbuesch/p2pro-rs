@@ -1,5 +1,6 @@
 //! Lossless video recording of the rendered frames into a HuffYUV AVI file.
 
+use crate::render::{RenderedFrame, RenderedFrameRgba};
 use anyhow::{self as ah, Context as _, format_err as err};
 use oxideav_avi::muxer;
 use oxideav_core::{
@@ -43,7 +44,7 @@ enum VideoCmd {
     Frame {
         width: u32,
         height: u32,
-        rgba: Vec<u8>,
+        rgba: Arc<RenderedFrameRgba>,
     },
     /// Finish the recording: write the trailer and close the file.
     Stop,
@@ -251,13 +252,13 @@ fn writer_main(rx: Receiver<VideoCmd>, events: tokio_mpsc::UnboundedSender<Video
                         );
                         continue;
                     }
-                    if let Err(e) = write_video_frame(rec, &rgba) {
+                    if let Err(e) = write_video_frame(rec, &rgba.bytes) {
                         abort(&mut open, &events, format!("{e:?}"));
                     }
                 } else if let Some(file) = pending.take() {
-                    match open_recording(file, width, height, &rgba) {
+                    match open_recording(file, width, height, &rgba.bytes) {
                         Ok(mut rec) => {
-                            if let Err(e) = write_video_frame(&mut rec, &rgba) {
+                            if let Err(e) = write_video_frame(&mut rec, &rgba.bytes) {
                                 let _ = events.send(VideoEvent::Error(format!("{e:?}")));
                             } else {
                                 open = Some(rec);
@@ -325,12 +326,12 @@ impl VideoRecorder {
     }
 
     /// Forwards one rendered RGBA frame to the recorder.
-    pub fn push_frame(&self, width: u32, height: u32, rgba: Vec<u8>) {
+    pub fn push_frame(&self, frame: &RenderedFrame) {
         if self.is_recording() {
             let _ = self.tx.send(VideoCmd::Frame {
-                width,
-                height,
-                rgba,
+                width: frame.meta.width,
+                height: frame.meta.height,
+                rgba: Arc::clone(&frame.rgba),
             });
         }
     }

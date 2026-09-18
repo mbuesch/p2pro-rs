@@ -8,17 +8,25 @@ use image::{
     codecs::png::{CompressionType, FilterType, PngEncoder},
 };
 use movavg::MovAvg;
+use std::sync::Arc;
 
 /// Number of frames over which to smooth the min/max temperature values.
 const MINMAX_TEMP_SMOOTHING: usize = 30;
 
-/// One rendered frame.
-#[derive(Clone, PartialEq)]
-pub struct RenderedFrame {
+#[derive(Debug, Clone, PartialEq)]
+pub struct RenderedFrameUri {
+    pub png_uri: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RenderedFrameRgba {
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RenderedFrameMeta {
     pub width: u32,
     pub height: u32,
-    pub rgba_bytes: Vec<u8>,
-    pub png_uri: String,
     pub min_temp: f32,
     pub max_temp: f32,
     pub min_pos: (u32, u32),
@@ -27,6 +35,13 @@ pub struct RenderedFrame {
     /// otherwise the smoothed auto min/max.
     pub scale_min: f32,
     pub scale_max: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RenderedFrame {
+    pub meta: RenderedFrameMeta,
+    pub rgba: Arc<RenderedFrameRgba>,
+    pub uri: Arc<RenderedFrameUri>,
 }
 
 pub struct Renderer {
@@ -99,17 +114,18 @@ impl Renderer {
         png_uri.push_str("data:image/png;base64,");
         STANDARD.encode_string(&png_bytes, &mut png_uri);
 
-        RenderedFrame {
+        let meta = RenderedFrameMeta {
             width,
             height,
-            rgba_bytes,
-            png_uri,
             min_temp,
             max_temp,
             min_pos,
             max_pos,
             scale_min,
             scale_max,
-        }
+        };
+        let rgba = Arc::new(RenderedFrameRgba { bytes: rgba_bytes });
+        let uri = Arc::new(RenderedFrameUri { png_uri });
+        RenderedFrame { meta, rgba, uri }
     }
 }
