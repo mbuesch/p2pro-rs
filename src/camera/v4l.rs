@@ -6,9 +6,14 @@
 //! YUYV luma/chroma pair are instead a little-endian 16-bit raw sample.
 
 use super::{CaptureState, HEIGHT, WIDTH, decode_frame};
-use crate::{app::FromUi, render::Renderer};
+use crate::{
+    app::FromUi,
+    camera::{PRODUCT_ID, VENDOR_ID},
+    render::Renderer,
+};
 use anyhow::{self as ah, Context as _, format_err as err};
 use std::{
+    fs,
     path::{Path, PathBuf},
     sync::Mutex,
     time::Duration,
@@ -55,6 +60,10 @@ async fn probe_devices(
 
 struct V4lDevice {
     device: Device,
+    #[allow(dead_code)]
+    usb_busnum: u8,
+    #[allow(dead_code)]
+    usb_devnum: u8,
     capabilities: Capabilities,
     fmt: Format,
     to_ui: mpsc::Sender<CaptureState>,
@@ -79,6 +88,52 @@ impl V4lDevice {
             ));
         }
 
+        let Some(node) = device_path.file_name() else {
+            return Err(err!("Failed to get file name from device path"));
+        };
+        let iface_path = fs::canonicalize(
+            Path::new("/sys/class/video4linux")
+                .join(node)
+                .join("device"),
+        )?;
+        let Some(usb_path) = iface_path.parent() else {
+            return Err(err!("Failed to get USB path from interface path"));
+        };
+
+        let usb_idvendor = fs::read_to_string(usb_path.join("idVendor"))
+            .context("Failed to read idVendor")?
+            .trim()
+            .to_owned();
+        let usb_idproduct = fs::read_to_string(usb_path.join("idProduct"))
+            .context("Failed to read idProduct")?
+            .trim()
+            .to_owned();
+        let usb_busnum = fs::read_to_string(usb_path.join("busnum"))
+            .context("Failed to read busnum")?
+            .trim()
+            .to_owned();
+        let usb_devnum = fs::read_to_string(usb_path.join("devnum"))
+            .context("Failed to read devnum")?
+            .trim()
+            .to_owned();
+
+        let usb_idvendor: u16 =
+            u16::from_str_radix(&usb_idvendor, 16).context("Failed to parse idVendor")?;
+        let usb_idproduct: u16 =
+            u16::from_str_radix(&usb_idproduct, 16).context("Failed to parse idProduct")?;
+        let usb_busnum: u8 = usb_busnum.parse().context("Failed to parse busnum")?;
+        let usb_devnum: u8 = usb_devnum.parse().context("Failed to parse devnum")?;
+
+        if usb_idvendor != VENDOR_ID || usb_idproduct != PRODUCT_ID {
+            return Err(err!(
+                "Device {:04x}:{:04x} is not a P2Pro device (expected {:04x}:{:04x})",
+                usb_idvendor,
+                usb_idproduct,
+                VENDOR_ID,
+                PRODUCT_ID,
+            ));
+        }
+
         let requested = Format::new(WIDTH, HEIGHT * 2, FourCC::new(b"YUYV"));
         let fmt = device.set_format(&requested)?;
         if fmt.width != requested.width
@@ -98,6 +153,8 @@ impl V4lDevice {
 
         Ok(Self {
             device,
+            usb_busnum,
+            usb_devnum,
             capabilities: caps,
             fmt,
             to_ui,

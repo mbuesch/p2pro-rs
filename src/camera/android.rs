@@ -7,16 +7,15 @@ pub mod jni_bridge;
 mod protocol;
 mod stream;
 
-use crate::{app::FromUi, camera::CaptureState};
+use crate::{
+    app::FromUi,
+    camera::{CaptureState, PRODUCT_ID, VENDOR_ID},
+};
 use anyhow::{self as ah, Context as _};
 use jni_bridge::{SessionGuard, UsbEvent};
 use rusb::UsbContext;
 use std::{collections::VecDeque, os::fd::RawFd, time::Duration};
 use tokio::sync::{mpsc, watch};
-
-/// InfiRay P2Pro USB vendor/product ID.
-const VENDOR_ID: u16 = 0x0bda;
-const PRODUCT_ID: u16 = 0x5830;
 
 /// Bounded ring buffer of log lines that are shown on screen.
 struct DebugLog {

@@ -21,6 +21,11 @@ pub const WIDTH: u32 = 256;
 /// Height of the thermal-only half, in pixels.
 pub const HEIGHT: u32 = 192;
 
+/// InfiRay P2Pro USB vendor ID.
+pub const VENDOR_ID: u16 = 0x0bda;
+/// InfiRay P2Pro USB product ID.
+pub const PRODUCT_ID: u16 = 0x5830;
+
 /// Shared state between capture loop and UI.
 #[derive(Clone)]
 pub enum CaptureState {
