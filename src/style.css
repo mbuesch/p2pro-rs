@@ -24,11 +24,75 @@ body {
     gap: 4px;
 }
 
+.topbar {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
 h1 {
     font-size: 0.9rem;
     font-weight: 600;
     margin: 0 0 0 20%;
-    flex: 0 0 auto;
+    flex: 1;
+}
+
+.hamburger {
+    position: fixed;
+    top: 20px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    width: 32px;
+    height: 24px;
+    padding: 4px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.hamburger:hover {
+    background: #2a2d33;
+}
+
+.hamburger span {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background: #e8e8e8;
+    border-radius: 1px;
+}
+
+.menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+}
+
+.menu-panel {
+    position: fixed;
+    top: 5dvh;
+    right: 40px;
+    width: calc(200vw / 3);
+    height: 90dvh;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: #1c1e22;
+    border: 3px solid #444;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+    z-index: 110;
+}
+
+.menu.text {
+    font-size: 0.9rem;
+    line-height: 1.35;
+    color: #e8e8e8;
 }
 
 .status {

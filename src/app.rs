@@ -71,11 +71,37 @@ pub fn App() -> Element {
     });
 
     let current = state();
+    let mut menu_open = use_signal(|| false);
 
     rsx! {
         style { "{CSS}" }
         div { id: "app",
-            h1 { "P2Pro - Thermal cam" }
+            div { class: "topbar",
+                h1 { "P2Pro - Thermal cam" }
+                button {
+                    class: "hamburger",
+                    aria_label: "Menu",
+                    onclick: move |_| menu_open.set(true),
+                    span {} // line 1
+                    span {} // line 2
+                    span {} // line 3
+                }
+            }
+            if menu_open() {
+                div {
+                    // backdrop catches all clicks outside the menu.
+                    class: "menu-backdrop",
+                    onclick: move |_| menu_open.set(false),
+                    div {
+                        class: "menu-panel",
+                        onclick: move |evt| evt.stop_propagation(),
+                        p { class: "text", "Menu" }
+                        button { class: "control-btn", "Dummy action 1" }
+                        button { class: "control-btn", "Dummy action 2" }
+                        button { class: "control-btn", "Dummy action 3" }
+                    }
+                }
+            }
             match current {
                 CaptureState::Connecting => rsx! {
                     p { class: "status", "Connecting to camera..." }
