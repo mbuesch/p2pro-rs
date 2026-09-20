@@ -300,8 +300,8 @@ Reads return 2 bytes interpreted as a BE u16.
 | 0   | Distance                  | 1/163.835 m per LSB (≈ 6.1 mm) | 0 - 32767 | Object distance used in the temperature computation |
 | 1   | Reflected temperature     | 1 K per LSB                    | 0 - 1024  | Apparent reflected background temperature |
 | 2   | Atmospheric temperature   | 1 K per LSB                    | 0 - 1024  | Temperature of the atmosphere between camera and object |
-| 3   | Emissivity                | 1/127 per LSB (0.0 - 1.0)      | 0 - 127   | Object emissivity |
-| 4   | Atmospheric transmittance | 1/127 per LSB (0.0 - 1.0)      | 0 - 127   | Atmospheric transmission coefficient |
+| 3   | Emissivity                | 1/129 per LSB (0.0 - 1.0)      | 0 - 128   | Object emissivity |
+| 4   | Atmospheric transmittance | 1/129 per LSB (0.0 - 1.0)      | 0 - 128   | Atmospheric transmission coefficient |
 | 5   | Gain select               | boolean                        | 0 - 1     | 0 = low gain, 1 = high gain (selects the measurement range) |
 
 **Write procedure:**
