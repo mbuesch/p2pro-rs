@@ -9,6 +9,7 @@ use super::{CaptureState, HEIGHT, WIDTH, decode_frame};
 use crate::{
     app::FromUi,
     camera::{PRODUCT_ID, VENDOR_ID},
+    camera_config::CameraConfig,
     render::Renderer,
 };
 use anyhow::{self as ah, Context as _, format_err as err};
@@ -58,12 +59,19 @@ async fn probe_devices(
     }
 }
 
+fn find_usb_device(busnum: u8, devnum: u8) -> ah::Result<rusb::Device<rusb::GlobalContext>> {
+    for dev in rusb::devices()?.iter() {
+        if dev.bus_number() == busnum && dev.address() == devnum {
+            return Ok(dev);
+        }
+    }
+    Err(err!("USB device {busnum}:{devnum} not found."))
+}
+
 struct V4lDevice {
     device: Device,
     #[allow(dead_code)]
-    usb_busnum: u8,
-    #[allow(dead_code)]
-    usb_devnum: u8,
+    usb_device: rusb::Device<rusb::GlobalContext>,
     capabilities: Capabilities,
     fmt: Format,
     to_ui: mpsc::Sender<CaptureState>,
@@ -134,6 +142,9 @@ impl V4lDevice {
             ));
         }
 
+        let usb_device =
+            find_usb_device(usb_busnum, usb_devnum).context("Failed to find USB device")?;
+
         let requested = Format::new(WIDTH, HEIGHT * 2, FourCC::new(b"YUYV"));
         let fmt = device.set_format(&requested)?;
         if fmt.width != requested.width
@@ -151,10 +162,18 @@ impl V4lDevice {
             ));
         }
 
+        let conf = CameraConfig::new(&usb_device)?;
+        let summary = conf
+            .device_info_summary()
+            .context("Failed to get device info summary")?;
+        println!("Camera info:");
+        for line in summary {
+            println!("    {line}");
+        }
+
         Ok(Self {
             device,
-            usb_busnum,
-            usb_devnum,
+            usb_device,
             capabilities: caps,
             fmt,
             to_ui,

@@ -21,6 +21,7 @@ movavg = "3"
 oxideav-avi = "0.0.10"
 oxideav-core = "0.1"
 oxideav-huffyuv = "0.0.3"
+rusb = { version = "0.9", features = [ "vendored" ] }
 tokio = { version = "1", default-features = false, features = [ "sync", "fs", "rt-multi-thread" ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -35,7 +36,6 @@ dioxus = { version = "0.7", default-features = false, features = [ "mobile", "mi
 jni = "0.22"
 libc = "0.2"
 log = "0.4"
-rusb = { version = "0.9", features = [ "vendored" ] }
 
 [build-dependencies]
 image = { version = "0.25", default-features = false, features = [ "png" ] }
