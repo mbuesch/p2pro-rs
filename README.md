@@ -135,6 +135,11 @@ ffmpeg -i input.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus -b:a 160k output
 ffmpeg -i input.avi -c:v libsvtav1 -crf 30 -preset 6 -c:a libopus -b:a 160k output.mp4
 ```
 
+## Hardware specification
+
+A [p2pro hardware specification](doc/P2PRO-HARDWARE-SPEC.md) has been reverse-engineered and documented.
+This specification is incomplete.
+
 ## License
 
 This app has been developed with use of AI agent assistance and with manual software development methods.
@@ -143,6 +148,11 @@ Copyright (c) 2026 Michael Büsch
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-This program has initially been AI-derived from the p2pro-live Python application.
+This program has initially been AI-derived from the p2pro-live and P2Pro-Viewer Python applications.
 Copyright of the original p2pro-live application:
 Copyright (c) 2024 Klaus Schwarzburg
+Copyright of the original P2Pro-Viewer application:
+Copyright (c) 2023 LeoDJ
+
+Many thanks to all people involved in the development of these base-projects.
+The development of p2pro-rs would not have been possible without the contributions and work of the original projects.
