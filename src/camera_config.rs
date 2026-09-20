@@ -360,13 +360,20 @@ impl CameraConfig {
             );
             self.control_out(MAILBOX_HEADER_A, &header)?;
             self.wait_ready()?;
-            let mut block = vec![0_u8; block_len]; //FIXME optimize
+            let mut block = [0_u8; BLOCK_LEN];
             self.control_in(MAILBOX_DATA, &mut block)?;
             self.wait_ready()?;
-            result.extend_from_slice(&block);
+            result.extend_from_slice(&block[..block_len]);
             offset += block_len;
         }
         Ok(result)
+    }
+
+    /// Standard-reads a 2-byte value and decodes it big-endian.
+    fn standard_read_u16be(&self, code: u16) -> ah::Result<u16> {
+        let data = self.standard_read(code, 0, false, 2)?;
+        let bytes: [u8; 2] = data.as_slice().try_into()?;
+        Ok(u16::from_be_bytes(bytes))
     }
 
     /// Long write.
@@ -381,7 +388,7 @@ impl CameraConfig {
         self.control_out(MAILBOX_HEADER_B, &long_command_header(code, p1, p2))?;
         self.control_out(MAILBOX_DATA, &long_command_params(0, len as u32))?;
         self.wait_ready()?;
-        let mut result = vec![0u8; len];
+        let mut result = vec![0_u8; len];
         self.control_in(MAILBOX_LONG_RESULT, &mut result)?;
         self.wait_ready()?;
         Ok(result)
@@ -449,28 +456,13 @@ impl CameraConfig {
     }
 
     /// Read the shutter-related reference value.
-    ///
-    /// FIXME:
-    /// The spec does not fix the byte order of the 2-byte response;
-    /// it is decoded little-endian here.
     pub fn shutter_vtemp(&self) -> ah::Result<u16> {
-        self.read_u16_le(CMD_SHUTTER_VTEMP)
+        self.standard_read_u16be(CMD_SHUTTER_VTEMP)
     }
 
     /// Read the current temperature-related raw value.
-    ///
-    /// FIXME:
-    /// The spec does not fix the byte order of the 2-byte response;
-    /// it is decoded little-endian here.
     pub fn current_vtemp(&self) -> ah::Result<u16> {
-        self.read_u16_le(CMD_CURRENT_VTEMP)
-    }
-
-    /// Standard-reads a 2-byte value and decodes it little-endian.
-    fn read_u16_le(&self, code: u16) -> ah::Result<u16> {
-        let data = self.standard_read(code, 0, false, 2)?;
-        let bytes: [u8; 2] = data.as_slice().try_into()?;
-        Ok(u16::from_le_bytes(bytes))
+        self.standard_read_u16be(CMD_CURRENT_VTEMP)
     }
 
     /// Read a TPD parameter. Return the raw value.
@@ -513,6 +505,18 @@ impl CameraConfig {
         self.tpd_set(TpdParam::Distance, raw)
     }
 
+    /// Read the atmospheric transmittance (0.0 - 1.0).
+    pub fn atmospheric_transmittance(&self) -> ah::Result<f32> {
+        //FIXME: I get 0x80. Should the divisor be 128 instead?
+        Ok(f32::from(self.tpd_get(TpdParam::AtmosphericTransmittance)?) / 127.0)
+    }
+
+    /// Set the atmospheric transmittance, clamped to 0.0 - 1.0.
+    pub fn set_atmospheric_transmittance(&self, transmittance: f32) -> ah::Result<()> {
+        let raw = (transmittance.clamp(0.0, 1.0) * 127.0).round() as u16;
+        self.tpd_set(TpdParam::AtmosphericTransmittance, raw)
+    }
+
     /// Read the gain selection: false = low gain, true = high gain.
     pub fn high_gain(&self) -> ah::Result<bool> {
         Ok(self.tpd_get(TpdParam::GainSelect)? != 0)
@@ -520,13 +524,10 @@ impl CameraConfig {
 
     /// Select the measurement range: false = low gain, true = high gain.
     pub fn set_high_gain(&self, high: bool) -> ah::Result<()> {
-        self.tpd_set(TpdParam::GainSelect, u16::from(high))
+        self.tpd_set(TpdParam::GainSelect, high.into())
     }
 
     /// Write a payload to device memory / SPI flash.
-    ///
-    /// The address is transmitted most-significant byte first; payloads may
-    /// exceed 256 bytes via the block-offset mechanism.
     pub fn spi_write(&self, address: u32, payload: &[u8]) -> ah::Result<()> {
         self.standard_write(CMD_SPI_TRANSFER | SET_FLAG, address, true, payload)
     }
@@ -537,35 +538,32 @@ impl CameraConfig {
     }
 
     /// Start the preview.
-    ///
-    /// FIXME:
-    /// The spec does not document the transport;
-    /// a standard write without payload is used.
     pub fn preview_start(&self) -> ah::Result<()> {
         self.standard_write(CMD_PREVIEW_START, 0, false, &[])
     }
 
     /// Stop the preview.
-    ///
-    /// FIXME:
-    /// See the transport note on [`Self::preview_start`].
     pub fn preview_stop(&self) -> ah::Result<()> {
         self.standard_write(CMD_PREVIEW_STOP, 0, false, &[])
     }
 
     /// Start the Y16 preview.
-    ///
-    /// FIXME:
-    /// See the transport note on [`Self::preview_start`].
     pub fn y16_preview_start(&self) -> ah::Result<()> {
         self.standard_write(CMD_Y16_PREVIEW_START, 0, false, &[])
     }
 
     /// Stop the Y16 preview.
-    ///
-    /// FIXME:
-    /// See the transport note on [`Self::preview_start`].
     pub fn y16_preview_stop(&self) -> ah::Result<()> {
         self.standard_write(CMD_Y16_PREVIEW_STOP, 0, false, &[])
+    }
+
+    /// Set the camera to its default configuration.
+    pub fn set_default(&self) -> ah::Result<()> {
+        self.set_emissivity(1.0)?;
+        self.set_distance(0.2)?;
+        self.set_high_gain(true)?;
+        self.set_palette(Palette::WhiteHot)?;
+        self.preview_stop()?;
+        Ok(())
     }
 }

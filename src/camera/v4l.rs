@@ -171,6 +171,10 @@ impl V4lDevice {
             println!("    {line}");
         }
 
+        if let Err(e) = conf.set_default() {
+            eprintln!("Failed to set default configuration: {e}");
+        }
+
         Ok(Self {
             device,
             usb_device,
