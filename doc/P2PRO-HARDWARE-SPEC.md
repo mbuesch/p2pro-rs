@@ -241,10 +241,10 @@ The palette command base code `0x8409` is sent as `0x8409` for GET and as `0xC40
 | `0x840C` | Shutter vtemp          | Standard read, 2 bytes | Shutter-related reference value. |
 | `0x8514` | Temperature parameter (TPD) properties | Long read / long write | Per-parameter access. |
 | `0x8B0D` | Current vtemp          | Standard read, 2 bytes | Current temperature-related raw value. |
-| `0xC10F` | Preview start          | - | Issued to start the preview pipeline. |
-| `0x020F` | Preview stop           | - | Stops the preview pipeline. |
-| `0x010A` | Y16 preview start      | - | Starts a 16-bit (raw) preview mode. |
-| `0x020A` | Y16 preview stop       | - | Stops the 16-bit preview mode. |
+| `0xC10F` | Preview start          | - | Start preview. |
+| `0x020F` | Preview stop           | - | Stop preview. |
+| `0x010A` | Y16 preview start      | - | Start Y16 preview. |
+| `0x020A` | Y16 preview stop       | - | Stop Y16 preview. |
 
 ## 7. Command Details and Parameter Tables
 

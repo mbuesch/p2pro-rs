@@ -536,7 +536,7 @@ impl CameraConfig {
         self.standard_read(CMD_SPI_TRANSFER, address, true, len)
     }
 
-    /// Start the preview pipeline.
+    /// Start the preview.
     ///
     /// FIXME:
     /// The spec does not document the transport;
@@ -545,7 +545,7 @@ impl CameraConfig {
         self.standard_write(CMD_PREVIEW_START, 0, false, &[])
     }
 
-    /// Stop the preview pipeline.
+    /// Stop the preview.
     ///
     /// FIXME:
     /// See the transport note on [`Self::preview_start`].
@@ -553,7 +553,7 @@ impl CameraConfig {
         self.standard_write(CMD_PREVIEW_STOP, 0, false, &[])
     }
 
-    /// Start the 16-bit raw preview mode.
+    /// Start the Y16 preview.
     ///
     /// FIXME:
     /// See the transport note on [`Self::preview_start`].
@@ -561,7 +561,7 @@ impl CameraConfig {
         self.standard_write(CMD_Y16_PREVIEW_START, 0, false, &[])
     }
 
-    /// Stop the 16-bit raw preview mode.
+    /// Stop the Y16 preview.
     ///
     /// FIXME:
     /// See the transport note on [`Self::preview_start`].

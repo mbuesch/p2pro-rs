@@ -1,4 +1,8 @@
 # Udev rules for p2pro devices
 
+# p2pro-rs needs read and write access to the USB device.
+# Choose a GROUP that your user is a member of.
+# (With the 'groups' command you can see which groups your user belongs to)
+#
 SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="5830", MODE="660", GROUP="video"
 #SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="5830", MODE="660", GROUP="plugdev"

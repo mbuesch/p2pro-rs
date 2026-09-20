@@ -66,6 +66,14 @@ But if you want to install it to `/opt`, you can do it with:
 ./desktop-install-linux.sh
 ```
 
+### Udev rules
+
+On Linux the app needs to talk to the raw camera USB device.
+This typically requires setting up appropriate udev rules to grant the necessary permissions.
+
+The `./desktop-install-linux.sh` script installs the [necessary udev rules](assets/99-p2pro.rules) to `/etc/udev/rules.d/`.
+You may need to review the installed udev rules and possibly adjust them to match your system configuration.
+
 ## Running on Android
 
 If you do not want to build the app yourself, you can download the latest APK from
@@ -150,9 +158,9 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 This program has initially been AI-derived from the p2pro-live and P2Pro-Viewer Python applications.
 Copyright of the original p2pro-live application:
-Copyright (c) 2024 Klaus Schwarzburg
+Copyright (c) 2024 Klaus Schwarzburg.
 Copyright of the original P2Pro-Viewer application:
-Copyright (c) 2023 LeoDJ
+Copyright (c) 2023 LeoDJ.
 
-Many thanks to all people involved in the development of these base-projects.
+Many thanks to all people who were involved in the development of these base-projects.
 The development of p2pro-rs would not have been possible without the contributions and work of the original projects.
