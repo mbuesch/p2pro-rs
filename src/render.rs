@@ -1,7 +1,7 @@
 //! Turns a temperature grid into a false-color PNG (as a data: URI) plus the
 //! min/max statistics needed to draw markers and the legend.
 
-use crate::{app::FromUi, colormap::build_color_lut};
+use crate::{app::FromUi, colormap::build_color_lut, util::FastFloat as _};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::{
     ExtendedColorType, ImageEncoder,
@@ -101,7 +101,7 @@ impl Renderer {
         // Convert to RGBA8 using the color LUT.
         let mut rgba_bytes = Vec::with_capacity((width * height * 4) as usize);
         for t in temps {
-            let n = (((t - scale_min) / range) * 255.0).clamp(0.0, 255.0) as usize;
+            let n = (((t.fsub(scale_min)).fdiv(range)).fmul(255.0)).clamp(0.0, 255.0) as usize;
             rgba_bytes.extend(&self.color_lut[n]);
         }
 

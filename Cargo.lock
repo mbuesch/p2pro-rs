@@ -3102,6 +3102,7 @@ version = "1.0.0"
 dependencies = [
  "android_logger",
  "anyhow",
+ "autocfg",
  "base64 0.23.1",
  "chrono",
  "clap",

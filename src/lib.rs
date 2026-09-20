@@ -4,6 +4,7 @@ mod camera_config;
 mod colormap;
 mod render;
 mod save;
+mod util;
 #[doc(hidden)]
 pub mod video;
 

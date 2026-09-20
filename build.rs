@@ -19,5 +19,9 @@ fn build_icon() {
 }
 
 fn main() {
+    let ac = autocfg::new();
+    ac.emit_rustc_version(1, 98);
+    println!("cargo:rustc-check-cfg=cfg(rustc_1_98)");
+
     build_icon();
 }

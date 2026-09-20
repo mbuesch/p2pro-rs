@@ -4,6 +4,7 @@
 use crate::{
     app::FromUi,
     render::{RenderedFrame, Renderer},
+    util::FastFloat as _,
 };
 use std::path::Path;
 use tokio::sync::{mpsc, watch};
@@ -92,11 +93,12 @@ pub fn decode_frame(
     for y in 0..half_height {
         let row = half_height + y; // bottom half carries the raw thermal data
         let row_start = row * stride;
+        assert!(row_start + ((width - 1) * 2) + 1 < buf.len());
         for x in 0..width {
             let offset = row_start + (x * 2);
             let raw = buf[offset] as u16 | ((buf[offset + 1] as u16) << 8);
             let raw = raw as f32;
-            temps.push((raw / 64.0) - 273.2); // raw/64 - 273.2 (Celsius)
+            temps.push((raw.fdiv(64.0)).fsub(273.15)); // raw/64 - 273.15 (Celsius)
         }
     }
 
