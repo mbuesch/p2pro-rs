@@ -26,8 +26,22 @@ install_p2prors()
         /opt/p2pro-rs/bin/p2pro-rs
 }
 
+install_udev_rules()
+{
+    if ! [ -f /etc/udev/rules.d/99-p2pro.rules ]; then
+        do_install \
+            -o root -g root -m 0644 \
+            "$basedir/assets/99-p2pro.rules" \
+            /etc/udev/rules.d/99-p2pro.rules
+        udevadm control --reload-rules || die "Failed to reload udev rules."
+    else
+        info "Udev rules /etc/udev/rules.d/99-p2pro.rules already installed."
+    fi
+}
+
 bin="$basedir/p2pro-rs-desktop-linux-x64"
 
 install_entry_checks
 install_dirs
 install_p2prors
+install_udev_rules

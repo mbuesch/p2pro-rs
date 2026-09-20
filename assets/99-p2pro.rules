@@ -1,0 +1,4 @@
+# Udev rules for p2pro devices
+
+SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="5830", MODE="660", GROUP="video"
+#SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="5830", MODE="660", GROUP="plugdev"
