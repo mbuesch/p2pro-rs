@@ -477,17 +477,17 @@ impl CameraConfig {
     /// The caller must keep the value within the parameter's range,
     /// see [`TpdParam`].
     pub fn tpd_set(&self, param: TpdParam, value: u16) -> ah::Result<()> {
-        self.long_write(CMD_TPD | SET_FLAG, param as u16, u32::from(value), 0, 0)
+        self.long_write(CMD_TPD | SET_FLAG, param as u16, value.into(), 0, 0)
     }
 
     /// Read the object emissivity (0.0 - 1.0).
     pub fn emissivity(&self) -> ah::Result<f32> {
-        Ok(f32::from(self.tpd_get(TpdParam::Emissivity)?) / 127.0)
+        Ok(f32::from(self.tpd_get(TpdParam::Emissivity)?) / 128.0)
     }
 
     /// Set the object emissivity, clamped to 0.0 - 1.0.
     pub fn set_emissivity(&self, emissivity: f32) -> ah::Result<()> {
-        let raw = (emissivity.clamp(0.0, 1.0) * 127.0).round() as u16;
+        let raw = (emissivity.clamp(0.0, 1.0) * 128.0).round() as u16;
         self.tpd_set(TpdParam::Emissivity, raw)
     }
 
@@ -507,13 +507,12 @@ impl CameraConfig {
 
     /// Read the atmospheric transmittance (0.0 - 1.0).
     pub fn atmospheric_transmittance(&self) -> ah::Result<f32> {
-        //FIXME: I get 0x80. Should the divisor be 128 instead?
-        Ok(f32::from(self.tpd_get(TpdParam::AtmosphericTransmittance)?) / 127.0)
+        Ok(f32::from(self.tpd_get(TpdParam::AtmosphericTransmittance)?) / 128.0)
     }
 
     /// Set the atmospheric transmittance, clamped to 0.0 - 1.0.
     pub fn set_atmospheric_transmittance(&self, transmittance: f32) -> ah::Result<()> {
-        let raw = (transmittance.clamp(0.0, 1.0) * 127.0).round() as u16;
+        let raw = (transmittance.clamp(0.0, 1.0) * 128.0).round() as u16;
         self.tpd_set(TpdParam::AtmosphericTransmittance, raw)
     }
 
@@ -560,6 +559,7 @@ impl CameraConfig {
     /// Set the camera to its default configuration.
     pub fn set_default(&self) -> ah::Result<()> {
         self.set_emissivity(1.0)?;
+        self.set_atmospheric_transmittance(1.0)?;
         self.set_distance(0.2)?;
         self.set_high_gain(true)?;
         self.set_palette(Palette::WhiteHot)?;
