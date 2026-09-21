@@ -5,7 +5,7 @@
 //TODO async!
 
 use anyhow::{self as ah, Context as _, format_err as err};
-use rusb::{Device, DeviceHandle, GlobalContext};
+use rusb::{Device, DeviceHandle, UsbContext};
 use std::{
     thread,
     time::{Duration, Instant},
@@ -198,13 +198,13 @@ fn long_command_params(p3: u32, p4: u32) -> [u8; 8] {
 /// P2Pro configuration channel.
 ///
 /// Wraps an opened USB device handle and speaks the vendor command protocol.
-pub struct CameraConfig {
-    handle: DeviceHandle<GlobalContext>,
+pub struct CameraConfig<C: UsbContext> {
+    handle: DeviceHandle<C>,
 }
 
-impl CameraConfig {
+impl<C: UsbContext> CameraConfig<C> {
     /// Opens the given USB device for configuration commands.
-    pub fn new(usb_device: &Device<GlobalContext>) -> ah::Result<Self> {
+    pub fn new(usb_device: &Device<C>) -> ah::Result<Self> {
         let handle = usb_device.open().context("Failed to open USB device")?;
         Ok(Self { handle })
     }
