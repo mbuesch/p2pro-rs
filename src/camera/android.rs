@@ -10,10 +10,11 @@ mod stream;
 use crate::{
     app::FromUi,
     camera::{CaptureState, PRODUCT_ID, VENDOR_ID},
+    camera_config::CameraConfig,
 };
 use anyhow::{self as ah, Context as _};
 use jni_bridge::{SessionGuard, UsbEvent};
-use rusb::UsbContext;
+use rusb::{DeviceHandle, UsbContext};
 use std::{collections::VecDeque, os::fd::RawFd, time::Duration};
 use tokio::sync::{mpsc, watch};
 
@@ -106,7 +107,36 @@ async fn run_session(
     to_ui: mpsc::Sender<CaptureState>,
     from_ui: watch::Receiver<FromUi>,
 ) -> ah::Result<()> {
-    let task = tokio::task::spawn_blocking(move || run_session_blocking(fd, token, to_ui, from_ui));
+    let session_guard = SessionGuard::new(token);
+
+    let context = rusb::Context::new().context("Failed to create a libusb context")?;
+
+    // SAFETY: `fd` is a USB device file descriptor already opened.
+    let handle = unsafe { context.open_device_with_fd(fd) }
+        .context("Failed to wrap the Android USB file descriptor")?;
+    let _ = to_ui
+        .send(CaptureState::Info(
+            "USB device opened via libusb; Configuring P2Pro hardware ...".to_string(),
+        ))
+        .await;
+
+    let mut conf = CameraConfig::from_handle(handle);
+    let summary = conf
+        .device_info_summary()
+        .await
+        .context("Failed to get device info summary")?;
+    println!("Camera info:");
+    for line in summary {
+        println!("    {line}");
+    }
+    if let Err(e) = conf.set_default().await {
+        eprintln!("Failed to set default configuration: {e}");
+    }
+    let handle = conf.into_handle();
+
+    let task = tokio::task::spawn_blocking(move || {
+        run_session_blocking(session_guard, handle, to_ui, from_ui)
+    });
     match task.await {
         Ok(result) => result,
         Err(join_err) => Err(ah::Error::new(join_err).context("USB capture thread panicked")),
@@ -115,22 +145,12 @@ async fn run_session(
 
 /// USB Video Class session (negotiation + streaming).
 fn run_session_blocking(
-    fd: RawFd,
-    token: i64,
+    _session_guard: SessionGuard,
+    handle: DeviceHandle<rusb::Context>,
     to_ui: mpsc::Sender<CaptureState>,
     from_ui: watch::Receiver<FromUi>,
 ) -> ah::Result<()> {
-    let _session_guard = SessionGuard::new(token);
-
-    let context = rusb::Context::new().context("Failed to create a libusb context")?;
-
-    // SAFETY: `fd` is a USB device file descriptor already opened.
-    let handle = unsafe { context.open_device_with_fd(fd) }
-        .context("Failed to wrap the Android USB file descriptor")?;
-    let _ = to_ui.blocking_send(CaptureState::Info(
-        "USB device opened via libusb; negotiating UVC format ...".to_string(),
-    ));
-
+    let _ = to_ui.blocking_send(CaptureState::Info("Negotiating UVC format ...".to_string()));
     let negotiated = protocol::negotiate(&handle)
         .context("USB Video Class negotiation with the P2Pro failed")?;
     log::info!(
