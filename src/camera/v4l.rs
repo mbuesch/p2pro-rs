@@ -163,7 +163,8 @@ impl V4lDevice {
             ));
         }
 
-        let mut conf = CameraConfig::open_device(&usb_device).await?;
+        let usb_handle = usb_device.open().context("Failed to open USB device")?;
+        let mut conf = CameraConfig::from_hw_access(usb_handle);
         let summary = conf
             .device_info_summary()
             .await

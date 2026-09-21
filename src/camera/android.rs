@@ -120,7 +120,7 @@ async fn run_session(
         ))
         .await;
 
-    let mut conf = CameraConfig::from_handle(handle);
+    let mut conf = CameraConfig::from_hw_access(handle);
     let summary = conf
         .device_info_summary()
         .await
@@ -132,7 +132,7 @@ async fn run_session(
     if let Err(e) = conf.set_default().await {
         eprintln!("Failed to set default configuration: {e}");
     }
-    let handle = conf.into_handle();
+    let handle = conf.into_hw_access();
 
     let task = tokio::task::spawn_blocking(move || {
         run_session_blocking(session_guard, handle, to_ui, from_ui)

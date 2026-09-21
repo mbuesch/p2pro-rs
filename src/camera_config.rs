@@ -3,8 +3,58 @@
 #![allow(dead_code)] //TODO
 
 use anyhow::{self as ah, Context as _, format_err as err};
-use rusb::{Device, DeviceHandle, UsbContext};
 use std::time::{Duration, Instant};
+
+/// P2Pro camera configuration hardware access abstraction.
+pub trait CameraConfigHwAccess {
+    fn write_control(
+        &self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        buf: &[u8],
+        timeout: Duration,
+    ) -> ah::Result<usize>;
+
+    fn read_control(
+        &self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        buf: &mut [u8],
+        timeout: Duration,
+    ) -> ah::Result<usize>;
+}
+
+impl<C: rusb::UsbContext> CameraConfigHwAccess for rusb::DeviceHandle<C> {
+    fn write_control(
+        &self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        buf: &[u8],
+        timeout: Duration,
+    ) -> ah::Result<usize> {
+        self.write_control(request_type, request, value, index, buf, timeout)
+            .map_err(|e| err!("USB write_control failed: {e}"))
+    }
+
+    fn read_control(
+        &self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        buf: &mut [u8],
+        timeout: Duration,
+    ) -> ah::Result<usize> {
+        self.read_control(request_type, request, value, index, buf, timeout)
+            .map_err(|e| err!("USB read_control failed: {e}"))
+    }
+}
 
 // Control transfer templates.
 const REQUEST_TYPE_OUT: u8 = 0x41;
@@ -193,23 +243,14 @@ fn long_command_params(p3: u32, p4: u32) -> [u8; 8] {
 /// P2Pro configuration channel.
 ///
 /// Wraps an opened USB device handle and speaks the vendor command protocol.
-pub struct CameraConfig<C: UsbContext> {
-    handle: DeviceHandle<C>,
+pub struct CameraConfig<H: CameraConfigHwAccess> {
+    handle: H,
     dev_accessed: bool,
 }
 
-impl<C: UsbContext> CameraConfig<C> {
-    /// Opens the given USB device for configuration commands.
-    pub async fn open_device(usb_device: &Device<C>) -> ah::Result<Self> {
-        let handle = usb_device.open().context("Failed to open USB device")?;
-        Ok(Self {
-            handle,
-            dev_accessed: false,
-        })
-    }
-
+impl<H: CameraConfigHwAccess> CameraConfig<H> {
     /// Creates a `CameraConfig` instance from an existing USB device handle.
-    pub fn from_handle(handle: DeviceHandle<C>) -> Self {
+    pub fn from_hw_access(handle: H) -> Self {
         Self {
             handle,
             dev_accessed: false,
@@ -217,7 +258,7 @@ impl<C: UsbContext> CameraConfig<C> {
     }
 
     /// Consumes the `CameraConfig` instance and returns the underlying USB device handle.
-    pub fn into_handle(self) -> DeviceHandle<C> {
+    pub fn into_hw_access(self) -> H {
         self.handle
     }
 
