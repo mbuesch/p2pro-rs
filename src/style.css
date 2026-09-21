@@ -39,23 +39,23 @@ h1 {
 
 .hamburger {
     position: fixed;
-    top: 20px;
+    top: 35px;
     right: 24px;
     display: flex;
     flex-direction: column;
     justify-content: center;
     gap: 4px;
-    width: 32px;
-    height: 24px;
-    padding: 4px;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
+    width: 40px;
+    height: 32px;
+    color: #e8e8e8;
+    background: #2a2d33;
+    border: 1px solid #444;
+    border-radius: 2px;
     cursor: pointer;
 }
 
 .hamburger:hover {
-    background: #2a2d33;
+    background: #34383f;
 }
 
 .hamburger span {
