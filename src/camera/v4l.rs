@@ -163,7 +163,7 @@ impl V4lDevice {
             ));
         }
 
-        let conf = CameraConfig::new(&usb_device).await?;
+        let mut conf = CameraConfig::open_device(&usb_device).await?;
         let summary = conf
             .device_info_summary()
             .await
@@ -172,7 +172,6 @@ impl V4lDevice {
         for line in summary {
             println!("    {line}");
         }
-
         if let Err(e) = conf.set_default().await {
             eprintln!("Failed to set default configuration: {e}");
         }
