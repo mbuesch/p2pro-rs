@@ -1,6 +1,5 @@
 pub trait FastFloat {
     fn fsub(self, other: Self) -> Self;
-    #[allow(dead_code)]
     fn fadd(self, other: Self) -> Self;
     fn fmul(self, other: Self) -> Self;
     fn fdiv(self, other: Self) -> Self;
