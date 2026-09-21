@@ -6,10 +6,7 @@
 
 use anyhow::{self as ah, Context as _, format_err as err};
 use rusb::{Device, DeviceHandle, UsbContext};
-use std::{
-    thread,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 // Control transfer templates.
 const REQUEST_TYPE_OUT: u8 = 0x41;
@@ -204,13 +201,13 @@ pub struct CameraConfig<C: UsbContext> {
 
 impl<C: UsbContext> CameraConfig<C> {
     /// Opens the given USB device for configuration commands.
-    pub fn new(usb_device: &Device<C>) -> ah::Result<Self> {
+    pub async fn new(usb_device: &Device<C>) -> ah::Result<Self> {
         let handle = usb_device.open().context("Failed to open USB device")?;
         Ok(Self { handle })
     }
 
     /// Performs a vendor control OUT transfer to the given mailbox.
-    fn control_out(&self, mailbox: u16, data: &[u8]) -> ah::Result<()> {
+    async fn control_out(&self, mailbox: u16, data: &[u8]) -> ah::Result<()> {
         let written = self
             .handle
             .write_control(
@@ -232,7 +229,7 @@ impl<C: UsbContext> CameraConfig<C> {
     }
 
     /// Performs a vendor control IN transfer from the given mailbox.
-    fn control_in(&self, mailbox: u16, buf: &mut [u8]) -> ah::Result<()> {
+    async fn control_in(&self, mailbox: u16, buf: &mut [u8]) -> ah::Result<()> {
         let read = self
             .handle
             .read_control(
@@ -254,17 +251,19 @@ impl<C: UsbContext> CameraConfig<C> {
     }
 
     /// Reads the command channel status register.
-    fn status(&self) -> ah::Result<u8> {
+    async fn status(&self) -> ah::Result<u8> {
         let mut buf = [0_u8; 1];
-        self.control_in(MAILBOX_STATUS, &mut buf)?;
+        self.control_in(MAILBOX_STATUS, &mut buf).await?;
         Ok(buf[0])
     }
 
     /// Polls the status register until the device is ready.
-    fn wait_ready(&self) -> ah::Result<()> {
+    async fn wait_ready(&self) -> ah::Result<()> {
         let deadline = Instant::now() + READY_TIMEOUT;
+        let mut interval = tokio::time::interval(POLL_INTERVAL);
         loop {
-            let status = self.status()?;
+            interval.tick().await;
+            let status = self.status().await?;
             if status & STATUS_BUSY == 0 {
                 return Ok(());
             }
@@ -274,12 +273,11 @@ impl<C: UsbContext> CameraConfig<C> {
             if Instant::now() >= deadline {
                 return Err(err!("Timeout waiting for the camera to become ready"));
             }
-            thread::sleep(POLL_INTERVAL);
         }
     }
 
     /// Standard write.
-    fn standard_write(
+    async fn standard_write(
         &self,
         code: u16,
         param: u32,
@@ -288,8 +286,9 @@ impl<C: UsbContext> CameraConfig<C> {
     ) -> ah::Result<()> {
         if payload.is_empty() {
             // No payload, header via mailbox A only.
-            self.control_out(MAILBOX_HEADER_A, &command_header(code, param, param_be, 0))?;
-            self.wait_ready()
+            self.control_out(MAILBOX_HEADER_A, &command_header(code, param, param_be, 0))
+                .await?;
+            self.wait_ready().await
         } else {
             // Payload, processed in blocks of at most 256 bytes.
             for (index, block) in payload.chunks(BLOCK_LEN).enumerate() {
@@ -300,16 +299,16 @@ impl<C: UsbContext> CameraConfig<C> {
                     param_be,
                     block.len() as u16,
                 );
-                self.control_out(MAILBOX_HEADER_B, &header)?;
-                self.wait_ready()?;
-                self.write_block(block)?;
+                self.control_out(MAILBOX_HEADER_B, &header).await?;
+                self.wait_ready().await?;
+                self.write_block(block).await?;
             }
             Ok(())
         }
     }
 
     /// Transmits one payload block in segments of at most 64 bytes,
-    fn write_block(&self, block: &[u8]) -> ah::Result<()> {
+    async fn write_block(&self, block: &[u8]) -> ah::Result<()> {
         let mut offset = 0;
         while offset < block.len() {
             let remaining = block.len() - offset;
@@ -318,22 +317,26 @@ impl<C: UsbContext> CameraConfig<C> {
                 self.control_out(
                     MAILBOX_BULK + offset as u16,
                     &block[offset..offset + SEGMENT_LEN],
-                )?;
+                )
+                .await?;
                 offset += SEGMENT_LEN;
             } else if remaining > SHORT_SEGMENT_LEN {
                 // Split tail: bulk mailbox first, last 8 bytes via data mailbox.
                 let split = remaining - SHORT_SEGMENT_LEN;
-                self.control_out(MAILBOX_BULK + offset as u16, &block[offset..offset + split])?;
+                self.control_out(MAILBOX_BULK + offset as u16, &block[offset..offset + split])
+                    .await?;
                 self.control_out(
                     MAILBOX_DATA + (offset + split) as u16,
                     &block[offset + split..],
-                )?;
-                self.wait_ready()?;
+                )
+                .await?;
+                self.wait_ready().await?;
                 offset += remaining;
             } else {
                 // Short final segment via data mailbox.
-                self.control_out(MAILBOX_DATA + offset as u16, &block[offset..])?;
-                self.wait_ready()?;
+                self.control_out(MAILBOX_DATA + offset as u16, &block[offset..])
+                    .await?;
+                self.wait_ready().await?;
                 offset += remaining;
             }
         }
@@ -341,7 +344,7 @@ impl<C: UsbContext> CameraConfig<C> {
     }
 
     /// Standard read.
-    fn standard_read(
+    async fn standard_read(
         &self,
         code: u16,
         param: u32,
@@ -358,11 +361,11 @@ impl<C: UsbContext> CameraConfig<C> {
                 param_be,
                 block_len as u16,
             );
-            self.control_out(MAILBOX_HEADER_A, &header)?;
-            self.wait_ready()?;
+            self.control_out(MAILBOX_HEADER_A, &header).await?;
+            self.wait_ready().await?;
             let mut block = [0_u8; BLOCK_LEN];
-            self.control_in(MAILBOX_DATA, &mut block)?;
-            self.wait_ready()?;
+            self.control_in(MAILBOX_DATA, &mut block).await?;
+            self.wait_ready().await?;
             result.extend_from_slice(&block[..block_len]);
             offset += block_len;
         }
@@ -370,27 +373,31 @@ impl<C: UsbContext> CameraConfig<C> {
     }
 
     /// Standard-reads a 2-byte value and decodes it big-endian.
-    fn standard_read_u16be(&self, code: u16) -> ah::Result<u16> {
-        let data = self.standard_read(code, 0, false, 2)?;
+    async fn standard_read_u16be(&self, code: u16) -> ah::Result<u16> {
+        let data = self.standard_read(code, 0, false, 2).await?;
         let bytes: [u8; 2] = data.as_slice().try_into()?;
         Ok(u16::from_be_bytes(bytes))
     }
 
     /// Long write.
-    fn long_write(&self, code: u16, p1: u16, p2: u32, p3: u32, p4: u32) -> ah::Result<()> {
-        self.control_out(MAILBOX_HEADER_B, &long_command_header(code, p1, p2))?;
-        self.control_out(MAILBOX_DATA, &long_command_params(p3, p4))?;
-        self.wait_ready()
+    async fn long_write(&self, code: u16, p1: u16, p2: u32, p3: u32, p4: u32) -> ah::Result<()> {
+        self.control_out(MAILBOX_HEADER_B, &long_command_header(code, p1, p2))
+            .await?;
+        self.control_out(MAILBOX_DATA, &long_command_params(p3, p4))
+            .await?;
+        self.wait_ready().await
     }
 
     /// Long read.
-    fn long_read(&self, code: u16, p1: u16, p2: u32, len: usize) -> ah::Result<Vec<u8>> {
-        self.control_out(MAILBOX_HEADER_B, &long_command_header(code, p1, p2))?;
-        self.control_out(MAILBOX_DATA, &long_command_params(0, len as u32))?;
-        self.wait_ready()?;
+    async fn long_read(&self, code: u16, p1: u16, p2: u32, len: usize) -> ah::Result<Vec<u8>> {
+        self.control_out(MAILBOX_HEADER_B, &long_command_header(code, p1, p2))
+            .await?;
+        self.control_out(MAILBOX_DATA, &long_command_params(0, len as u32))
+            .await?;
+        self.wait_ready().await?;
         let mut result = vec![0_u8; len];
-        self.control_in(MAILBOX_LONG_RESULT, &mut result)?;
-        self.wait_ready()?;
+        self.control_in(MAILBOX_LONG_RESULT, &mut result).await?;
+        self.wait_ready().await?;
         Ok(result)
     }
 
@@ -398,29 +405,30 @@ impl<C: UsbContext> CameraConfig<C> {
     ///
     /// Maintenance operation only: the device re-enumerates afterwards and
     /// this handle must be discarded.
-    pub fn reset_to_rom(self) -> ah::Result<()> {
-        self.standard_write(CMD_RESET_TO_ROM, 0, false, &[])
+    pub async fn reset_to_rom(self) -> ah::Result<()> {
+        self.standard_write(CMD_RESET_TO_ROM, 0, false, &[]).await
     }
 
     /// Read a raw device information item.
-    pub fn device_info(&self, item: DeviceInfoItem) -> ah::Result<Vec<u8>> {
+    pub async fn device_info(&self, item: DeviceInfoItem) -> ah::Result<Vec<u8>> {
         self.standard_read(
             CMD_DEVICE_INFO,
             item.item_index(),
             false,
             item.response_len(),
         )
+        .await
     }
 
     /// Read a device information item as a string, trimming NUL padding.
-    pub fn device_info_string(&self, item: DeviceInfoItem) -> ah::Result<String> {
-        let raw = self.device_info(item)?;
+    pub async fn device_info_string(&self, item: DeviceInfoItem) -> ah::Result<String> {
+        let raw = self.device_info(item).await?;
         let end = raw.iter().position(|&byte| byte == 0).unwrap_or(raw.len());
         String::from_utf8(raw[..end].to_vec()).context("Device information is not valid UTF-8")
     }
 
     /// Read a summary of all available device information items.
-    pub fn device_info_summary(&self) -> ah::Result<Vec<String>> {
+    pub async fn device_info_summary(&self) -> ah::Result<Vec<String>> {
         let items = [
             DeviceInfoItem::DeviceQualification,
             DeviceInfoItem::FirmwareBuildVersion,
@@ -430,7 +438,7 @@ impl<C: UsbContext> CameraConfig<C> {
         ];
         let mut summary = Vec::with_capacity(items.len());
         for item in items {
-            if let Ok(value) = self.device_info(item) {
+            if let Ok(value) = self.device_info(item).await {
                 let value = String::from_utf8(value).unwrap_or_default();
                 summary.push(format!("{item:?}: {value}"));
             }
@@ -439,35 +447,38 @@ impl<C: UsbContext> CameraConfig<C> {
     }
 
     /// Select the pseudo-colour palette of the default preview path
-    pub fn set_palette(&self, palette: Palette) -> ah::Result<()> {
+    pub async fn set_palette(&self, palette: Palette) -> ah::Result<()> {
         self.standard_write(
             CMD_PALETTE | SET_FLAG,
             PREVIEW_PATH_DEFAULT,
             false,
             &[palette as u8],
         )
+        .await
     }
 
     /// Query the palette of the default preview path.
-    pub fn palette(&self) -> ah::Result<Palette> {
-        let data = self.standard_read(CMD_PALETTE, PREVIEW_PATH_DEFAULT, false, 1)?;
+    pub async fn palette(&self) -> ah::Result<Palette> {
+        let data = self
+            .standard_read(CMD_PALETTE, PREVIEW_PATH_DEFAULT, false, 1)
+            .await?;
         let id = data.first().copied().context("Empty palette response")?;
         Palette::try_from(id)
     }
 
     /// Read the shutter-related reference value.
-    pub fn shutter_vtemp(&self) -> ah::Result<u16> {
-        self.standard_read_u16be(CMD_SHUTTER_VTEMP)
+    pub async fn shutter_vtemp(&self) -> ah::Result<u16> {
+        self.standard_read_u16be(CMD_SHUTTER_VTEMP).await
     }
 
     /// Read the current temperature-related raw value.
-    pub fn current_vtemp(&self) -> ah::Result<u16> {
-        self.standard_read_u16be(CMD_CURRENT_VTEMP)
+    pub async fn current_vtemp(&self) -> ah::Result<u16> {
+        self.standard_read_u16be(CMD_CURRENT_VTEMP).await
     }
 
     /// Read a TPD parameter. Return the raw value.
-    pub fn tpd_get(&self, param: TpdParam) -> ah::Result<u16> {
-        let data = self.long_read(CMD_TPD, param as u16, 0, 2)?;
+    pub async fn tpd_get(&self, param: TpdParam) -> ah::Result<u16> {
+        let data = self.long_read(CMD_TPD, param as u16, 0, 2).await?;
         let bytes: [u8; 2] = data.as_slice().try_into().context("Short TPD response")?;
         Ok(u16::from_be_bytes(bytes))
     }
@@ -476,94 +487,99 @@ impl<C: UsbContext> CameraConfig<C> {
     ///
     /// The caller must keep the value within the parameter's range,
     /// see [`TpdParam`].
-    pub fn tpd_set(&self, param: TpdParam, value: u16) -> ah::Result<()> {
+    pub async fn tpd_set(&self, param: TpdParam, value: u16) -> ah::Result<()> {
         self.long_write(CMD_TPD | SET_FLAG, param as u16, value.into(), 0, 0)
+            .await
     }
 
     /// Read the object emissivity (0.0 - 1.0).
-    pub fn emissivity(&self) -> ah::Result<f32> {
-        Ok(f32::from(self.tpd_get(TpdParam::Emissivity)?) / 128.0)
+    pub async fn emissivity(&self) -> ah::Result<f32> {
+        Ok(f32::from(self.tpd_get(TpdParam::Emissivity).await?) / 128.0)
     }
 
     /// Set the object emissivity, clamped to 0.0 - 1.0.
-    pub fn set_emissivity(&self, emissivity: f32) -> ah::Result<()> {
+    pub async fn set_emissivity(&self, emissivity: f32) -> ah::Result<()> {
         let raw = (emissivity.clamp(0.0, 1.0) * 128.0).round() as u16;
-        self.tpd_set(TpdParam::Emissivity, raw)
+        self.tpd_set(TpdParam::Emissivity, raw).await
     }
 
     /// Read the object distance in metres used for temperature computation.
-    pub fn distance(&self) -> ah::Result<f32> {
-        Ok(f32::from(self.tpd_get(TpdParam::Distance)?) / 163.835)
+    pub async fn distance(&self) -> ah::Result<f32> {
+        Ok(f32::from(self.tpd_get(TpdParam::Distance).await?) / 163.835)
     }
 
     /// Set the object distance in metres (0 - ~200 m).
-    pub fn set_distance(&self, metres: f32) -> ah::Result<()> {
+    pub async fn set_distance(&self, metres: f32) -> ah::Result<()> {
         if !(0.0..=200.0).contains(&metres) {
             return Err(err!("Distance out of range: {metres} m"));
         }
         let raw = (metres * 163.835).round() as u16;
-        self.tpd_set(TpdParam::Distance, raw)
+        self.tpd_set(TpdParam::Distance, raw).await
     }
 
     /// Read the atmospheric transmittance (0.0 - 1.0).
-    pub fn atmospheric_transmittance(&self) -> ah::Result<f32> {
-        Ok(f32::from(self.tpd_get(TpdParam::AtmosphericTransmittance)?) / 128.0)
+    pub async fn atmospheric_transmittance(&self) -> ah::Result<f32> {
+        Ok(f32::from(self.tpd_get(TpdParam::AtmosphericTransmittance).await?) / 128.0)
     }
 
     /// Set the atmospheric transmittance, clamped to 0.0 - 1.0.
-    pub fn set_atmospheric_transmittance(&self, transmittance: f32) -> ah::Result<()> {
+    pub async fn set_atmospheric_transmittance(&self, transmittance: f32) -> ah::Result<()> {
         let raw = (transmittance.clamp(0.0, 1.0) * 128.0).round() as u16;
-        self.tpd_set(TpdParam::AtmosphericTransmittance, raw)
+        self.tpd_set(TpdParam::AtmosphericTransmittance, raw).await
     }
 
     /// Read the gain selection: false = low gain, true = high gain.
-    pub fn high_gain(&self) -> ah::Result<bool> {
-        Ok(self.tpd_get(TpdParam::GainSelect)? != 0)
+    pub async fn high_gain(&self) -> ah::Result<bool> {
+        Ok(self.tpd_get(TpdParam::GainSelect).await? != 0)
     }
 
     /// Select the measurement range: false = low gain, true = high gain.
-    pub fn set_high_gain(&self, high: bool) -> ah::Result<()> {
-        self.tpd_set(TpdParam::GainSelect, high.into())
+    pub async fn set_high_gain(&self, high: bool) -> ah::Result<()> {
+        self.tpd_set(TpdParam::GainSelect, high.into()).await
     }
 
     /// Write a payload to device memory / SPI flash.
-    pub fn spi_write(&self, address: u32, payload: &[u8]) -> ah::Result<()> {
+    pub async fn spi_write(&self, address: u32, payload: &[u8]) -> ah::Result<()> {
         self.standard_write(CMD_SPI_TRANSFER | SET_FLAG, address, true, payload)
+            .await
     }
 
     /// Read device memory / SPI flash.
-    pub fn spi_read(&self, address: u32, len: usize) -> ah::Result<Vec<u8>> {
+    pub async fn spi_read(&self, address: u32, len: usize) -> ah::Result<Vec<u8>> {
         self.standard_read(CMD_SPI_TRANSFER, address, true, len)
+            .await
     }
 
     /// Start the preview.
-    pub fn preview_start(&self) -> ah::Result<()> {
-        self.standard_write(CMD_PREVIEW_START, 0, false, &[])
+    pub async fn preview_start(&self) -> ah::Result<()> {
+        self.standard_write(CMD_PREVIEW_START, 0, false, &[]).await
     }
 
     /// Stop the preview.
-    pub fn preview_stop(&self) -> ah::Result<()> {
-        self.standard_write(CMD_PREVIEW_STOP, 0, false, &[])
+    pub async fn preview_stop(&self) -> ah::Result<()> {
+        self.standard_write(CMD_PREVIEW_STOP, 0, false, &[]).await
     }
 
     /// Start the Y16 preview.
-    pub fn y16_preview_start(&self) -> ah::Result<()> {
+    pub async fn y16_preview_start(&self) -> ah::Result<()> {
         self.standard_write(CMD_Y16_PREVIEW_START, 0, false, &[])
+            .await
     }
 
     /// Stop the Y16 preview.
-    pub fn y16_preview_stop(&self) -> ah::Result<()> {
+    pub async fn y16_preview_stop(&self) -> ah::Result<()> {
         self.standard_write(CMD_Y16_PREVIEW_STOP, 0, false, &[])
+            .await
     }
 
     /// Set the camera to its default configuration.
-    pub fn set_default(&self) -> ah::Result<()> {
-        self.set_emissivity(1.0)?;
-        self.set_atmospheric_transmittance(1.0)?;
-        self.set_distance(0.2)?;
-        self.set_high_gain(true)?;
-        self.set_palette(Palette::WhiteHot)?;
-        self.preview_stop()?;
+    pub async fn set_default(&self) -> ah::Result<()> {
+        self.set_emissivity(1.0).await?;
+        self.set_atmospheric_transmittance(1.0).await?;
+        self.set_distance(0.2).await?;
+        self.set_high_gain(true).await?;
+        self.set_palette(Palette::WhiteHot).await?;
+        self.preview_stop().await?;
         Ok(())
     }
 }

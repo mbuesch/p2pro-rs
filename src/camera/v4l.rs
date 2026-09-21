@@ -47,7 +47,8 @@ async fn probe_devices(
             let name = entry.file_name();
             if let Some(name) = name.to_str()
                 && name.starts_with("video")
-                && let Ok(camera) = V4lDevice::new(&entry.path(), to_ui.clone(), from_ui.clone())
+                && let Ok(camera) =
+                    V4lDevice::new(&entry.path(), to_ui.clone(), from_ui.clone()).await
             {
                 println!("Found P2Pro device: {}", entry.path().display());
                 return Ok((camera, entry.path()));
@@ -80,7 +81,7 @@ struct V4lDevice {
 }
 
 impl V4lDevice {
-    fn new(
+    async fn new(
         device_path: &Path,
         to_ui: mpsc::Sender<CaptureState>,
         from_ui: watch::Receiver<FromUi>,
@@ -162,16 +163,17 @@ impl V4lDevice {
             ));
         }
 
-        let conf = CameraConfig::new(&usb_device)?;
+        let conf = CameraConfig::new(&usb_device).await?;
         let summary = conf
             .device_info_summary()
+            .await
             .context("Failed to get device info summary")?;
         println!("Camera info:");
         for line in summary {
             println!("    {line}");
         }
 
-        if let Err(e) = conf.set_default() {
+        if let Err(e) = conf.set_default().await {
             eprintln!("Failed to set default configuration: {e}");
         }
 
@@ -215,7 +217,7 @@ pub async fn capture_loop(
     loop {
         let camera = if let Some(device_path) = &device_path {
             // Open the specified device.
-            match V4lDevice::new(device_path, to_ui.clone(), from_ui.clone()) {
+            match V4lDevice::new(device_path, to_ui.clone(), from_ui.clone()).await {
                 Ok(c) => Some((c, device_path.to_path_buf())),
                 Err(e) => {
                     let _ = to_ui
