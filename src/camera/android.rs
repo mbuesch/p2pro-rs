@@ -10,10 +10,10 @@ mod stream;
 use crate::{
     app::FromUi,
     camera::{CaptureState, PRODUCT_ID, VENDOR_ID},
-    camera_config::CameraConfig,
 };
 use anyhow::{self as ah, Context as _};
 use jni_bridge::{SessionGuard, UsbEvent};
+use p2pro_hw::CameraConfig;
 use rusb::{DeviceHandle, UsbContext};
 use std::{collections::VecDeque, os::fd::RawFd, time::Duration};
 use tokio::sync::{mpsc, watch};

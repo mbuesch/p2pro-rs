@@ -1,5 +1,22 @@
 [package]
 name = "p2pro-rs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+readme.workspace = true
+categories.workspace = true
+keywords.workspace = true
+
+[workspace]
+members = [
+    "p2pro-hw",
+]
+
+[workspace.package]
 version = "1.0.0"
 edition = "2024"
 rust-version = "1.91"
@@ -11,7 +28,7 @@ readme = "README.md"
 categories = [ "graphics", "hardware-support", "science" ]
 keywords = [ "infiray", "p2pro", "thermal", "camera" ]
 
-[dependencies]
+[workspace.dependencies]
 anyhow = "1"
 base64 = "0.23"
 chrono = "0.4"
@@ -22,7 +39,21 @@ oxideav-avi = "0.0.10"
 oxideav-core = "0.1"
 oxideav-huffyuv = "0.0.3"
 rusb = { version = "0.9", features = [ "vendored" ] }
-tokio = { version = "1", default-features = false, features = [ "sync", "fs", "rt-multi-thread" ] }
+tokio = { version = "1", default-features = false, features = [ "sync", "fs", "time", "rt-multi-thread" ] }
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+chrono.workspace = true
+curveipo.workspace = true
+image.workspace = true
+movavg.workspace = true
+oxideav-avi.workspace = true
+oxideav-core.workspace = true
+oxideav-huffyuv.workspace = true
+p2pro-hw = { path = "p2pro-hw" }
+rusb.workspace = true
+tokio.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 clap = { version = "4", features = [ "derive" ] }

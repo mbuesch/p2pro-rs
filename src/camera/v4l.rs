@@ -9,10 +9,10 @@ use super::{CaptureState, HEIGHT, WIDTH, decode_frame};
 use crate::{
     app::FromUi,
     camera::{PRODUCT_ID, VENDOR_ID},
-    camera_config::CameraConfig,
     render::Renderer,
 };
 use anyhow::{self as ah, Context as _, format_err as err};
+use p2pro_hw::CameraConfig;
 use std::{
     fs,
     path::{Path, PathBuf},

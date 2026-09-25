@@ -3097,6 +3097,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "p2pro-hw"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "rusb",
+ "tokio",
+]
+
+[[package]]
 name = "p2pro-rs"
 version = "1.0.0"
 dependencies = [
@@ -3116,6 +3125,7 @@ dependencies = [
  "oxideav-avi",
  "oxideav-core",
  "oxideav-huffyuv",
+ "p2pro-hw",
  "rfd",
  "rusb",
  "tokio",

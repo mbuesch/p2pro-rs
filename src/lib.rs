@@ -1,6 +1,5 @@
 mod app;
 mod camera;
-mod camera_config;
 mod colormap;
 mod render;
 mod save;

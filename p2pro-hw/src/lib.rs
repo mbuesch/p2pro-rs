@@ -1,6 +1,6 @@
-//! P2Pro camera configuration protocol.
+//! P2Pro camera hardware access.
 
-#![allow(dead_code)] //TODO
+#![forbid(unsafe_code)]
 
 use anyhow::{self as ah, Context as _, format_err as err};
 use std::time::{Duration, Instant};
@@ -28,6 +28,7 @@ pub trait CameraConfigHwAccess {
     ) -> ah::Result<usize>;
 }
 
+#[cfg(feature = "rusb")]
 impl<C: rusb::UsbContext> CameraConfigHwAccess for rusb::DeviceHandle<C> {
     fn write_control(
         &self,
@@ -150,15 +151,19 @@ impl TryFrom<u8> for Palette {
 
 /// Device information item selector for [`CameraConfig::device_info`]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DeviceInfoItem {
+enum DeviceInfoItem {
+    #[allow(dead_code)]
     ChipId,
     FirmwareCompileDate,
     DeviceQualification,
+    #[allow(dead_code)]
     IrSensorInfo,
+    #[allow(dead_code)]
     ProjectInfo,
     FirmwareBuildVersion,
     PartNumber,
     SerialNumber,
+    #[allow(dead_code)]
     SensorId,
 }
 
@@ -194,12 +199,14 @@ impl DeviceInfoItem {
 /// Temperature measurement parameter (TPD) selector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
-pub enum TpdParam {
+enum TpdParam {
     /// Object distance.
     Distance = 0,
     /// Apparent reflected background temperature.
+    #[allow(dead_code)]
     ReflectedTemperature = 1,
     /// Temperature of the intervening atmosphere.
+    #[allow(dead_code)]
     AtmosphericTemperature = 2,
     /// Object emissivity.
     Emissivity = 3,
@@ -478,7 +485,7 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
     }
 
     /// Read a raw device information item.
-    pub async fn device_info(&mut self, item: DeviceInfoItem) -> ah::Result<Vec<u8>> {
+    async fn device_info(&mut self, item: DeviceInfoItem) -> ah::Result<Vec<u8>> {
         self.standard_read(
             CMD_DEVICE_INFO,
             item.item_index(),
@@ -489,7 +496,8 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
     }
 
     /// Read a device information item as a string, trimming NUL padding.
-    pub async fn device_info_string(&mut self, item: DeviceInfoItem) -> ah::Result<String> {
+    #[allow(dead_code)]
+    async fn device_info_string(&mut self, item: DeviceInfoItem) -> ah::Result<String> {
         let raw = self.device_info(item).await?;
         let end = raw.iter().position(|&byte| byte == 0).unwrap_or(raw.len());
         String::from_utf8(raw[..end].to_vec()).context("Device information is not valid UTF-8")
@@ -545,7 +553,7 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
     }
 
     /// Read a TPD parameter. Return the raw value.
-    pub async fn tpd_get(&mut self, param: TpdParam) -> ah::Result<u16> {
+    async fn tpd_get(&mut self, param: TpdParam) -> ah::Result<u16> {
         let data = self.long_read(CMD_TPD, param as u16, 0, 2).await?;
         let bytes: [u8; 2] = data.as_slice().try_into().context("Short TPD response")?;
         Ok(u16::from_be_bytes(bytes))
@@ -555,7 +563,7 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
     ///
     /// The caller must keep the value within the parameter's range,
     /// see [`TpdParam`].
-    pub async fn tpd_set(&mut self, param: TpdParam, value: u16) -> ah::Result<()> {
+    async fn tpd_set(&mut self, param: TpdParam, value: u16) -> ah::Result<()> {
         self.long_write(CMD_TPD | SET_FLAG, param as u16, value.into(), 0, 0)
             .await
     }
@@ -640,7 +648,7 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
             .await
     }
 
-    /// Set the camera to its default configuration.
+    /// Set the camera to a sane default configuration.
     pub async fn set_default(&mut self) -> ah::Result<()> {
         self.set_emissivity(1.0).await?;
         self.set_atmospheric_transmittance(1.0).await?;
