@@ -364,6 +364,22 @@ fn ThermalView(
             send_from_ui(&tx, (fix_min(), &min_text()), (fix_max(), &max_text()));
         }
     };
+    let on_min_decrement = {
+        let tx = from_ui_tx.clone();
+        move |_| {
+            let next = step_temp(&min_text(), cur_min_temp, -1.0);
+            min_text.set(next.clone());
+            send_from_ui(&tx, (fix_min(), &next), (fix_max(), &max_text()));
+        }
+    };
+    let on_min_increment = {
+        let tx = from_ui_tx.clone();
+        move |_| {
+            let next = step_temp(&min_text(), cur_min_temp, 1.0);
+            min_text.set(next.clone());
+            send_from_ui(&tx, (fix_min(), &next), (fix_max(), &max_text()));
+        }
+    };
     let on_fix_max = {
         let tx = from_ui_tx.clone();
         move |e: Event<FormData>| {
@@ -380,6 +396,22 @@ fn ThermalView(
         move |e: Event<FormData>| {
             max_text.set(e.value());
             send_from_ui(&tx, (fix_min(), &min_text()), (fix_max(), &max_text()));
+        }
+    };
+    let on_max_decrement = {
+        let tx = from_ui_tx.clone();
+        move |_| {
+            let next = step_temp(&max_text(), cur_max_temp, -1.0);
+            max_text.set(next.clone());
+            send_from_ui(&tx, (fix_min(), &min_text()), (fix_max(), &next));
+        }
+    };
+    let on_max_increment = {
+        let tx = from_ui_tx.clone();
+        move |_| {
+            let next = step_temp(&max_text(), cur_max_temp, 1.0);
+            max_text.set(next.clone());
+            send_from_ui(&tx, (fix_min(), &min_text()), (fix_max(), &next));
         }
     };
 
@@ -435,13 +467,31 @@ fn ThermalView(
                             }
                             "Min"
                         }
+                        button {
+                            class: "range-step",
+                            r#type: "button",
+                            aria_label: "Decrease minimum temperature",
+                            title: "Decrease minimum temperature by 1 degree",
+                            disabled: !fix_min(),
+                            onclick: on_min_decrement,
+                            "-"
+                        }
                         input {
                             class: "range-input",
                             r#type: "number",
-                            step: "0.5",
+                            step: "1",
                             disabled: !fix_min(),
                             value: "{min_text}",
                             oninput: on_min_input,
+                        }
+                        button {
+                            class: "range-step",
+                            r#type: "button",
+                            aria_label: "Increase minimum temperature",
+                            title: "Increase minimum temperature by 1 degree",
+                            disabled: !fix_min(),
+                            onclick: on_min_increment,
+                            "+"
                         }
                         span { class: "range-unit", "°C" }
                     }
@@ -454,13 +504,31 @@ fn ThermalView(
                             }
                             "Max"
                         }
+                        button {
+                            class: "range-step",
+                            r#type: "button",
+                            aria_label: "Decrease maximum temperature",
+                            title: "Decrease maximum temperature by 1 degree",
+                            disabled: !fix_max(),
+                            onclick: on_max_decrement,
+                            "-"
+                        }
                         input {
                             class: "range-input",
                             r#type: "number",
-                            step: "0.5",
+                            step: "1",
                             disabled: !fix_max(),
                             value: "{max_text}",
                             oninput: on_max_input,
+                        }
+                        button {
+                            class: "range-step",
+                            r#type: "button",
+                            aria_label: "Increase maximum temperature",
+                            title: "Increase maximum temperature by 1 degree",
+                            disabled: !fix_max(),
+                            onclick: on_max_increment,
+                            "+"
                         }
                         span { class: "range-unit", "°C" }
                     }
@@ -599,6 +667,10 @@ fn marker_screen_px(
 /// Empty or invalid text counts as "no manual limit" (auto-scaling).
 fn parse_temp(text: &str) -> Option<f32> {
     text.trim().replace(',', ".").parse().ok()
+}
+
+fn step_temp(text: &str, current_temp: f32, delta: f32) -> String {
+    format!("{:.1}", parse_temp(text).unwrap_or(current_temp) + delta)
 }
 
 /// Sends the current state of the manual-range widgets to the capture thread.

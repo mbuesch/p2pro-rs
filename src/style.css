@@ -270,7 +270,8 @@ h1 {
 .range-row {
     display: flex;
     align-items: center;
-    gap: 6px;
+    min-height: 24px;
+    gap: 4px;
     font-size: 12px;
 }
 
@@ -279,17 +280,55 @@ h1 {
     align-items: center;
     gap: 4px;
     min-width: 46px;
+    min-height: 24px;
     cursor: pointer;
 }
 
 .range-input {
-    width: 60px;
-    padding: 3px 4px;
-    font-size: 12px;
+    box-sizing: border-box;
+    width: 68px;
+    min-width: 0;
+    height: 24px;
+    min-height: 24px;
+    padding: 0 4px;
+    font-size: 16px;
+    line-height: 20px;
     color: #e8e8e8;
     background: #1c1e22;
     border: 1px solid #444;
     border-radius: 4px;
+}
+
+.range-step {
+    display: flex;
+    flex: 0 0 48px;
+    width: 48px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1;
+    color: #e8e8e8;
+    background: #2a2d33;
+    border: 1px solid #555;
+    border-radius: 4px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.range-step:hover:not(:disabled) {
+    background: #34383f;
+}
+
+.range-step:active:not(:disabled) {
+    background: #3d424a;
+}
+
+.range-step:disabled {
+    opacity: 0.4;
+    cursor: default;
 }
 
 .range-input:disabled {
@@ -298,4 +337,41 @@ h1 {
 
 .range-unit {
     opacity: 0.7;
+}
+
+@media (max-width: 600px) {
+    .viewer {
+        flex-direction: column;
+    }
+
+    .legend {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .legend-main {
+        flex: 1 0 100%;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .legend-bar {
+        width: auto;
+        height: 8px;
+    }
+
+    .legend-labels {
+        flex-direction: row;
+    }
+
+    .controls {
+        flex-direction: row;
+        flex: 1 1 100%;
+    }
+
+    .controls .control-btn {
+        flex: 1;
+        width: auto;
+    }
 }
