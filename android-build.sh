@@ -33,7 +33,7 @@ sed -i 's|<string name="app_name">P2ProRs</string>|<string name="app_name">InfiR
 
 # dx hardcodes versionCode = 1 in its build.gradle.kts template.  Derive it
 # from the Cargo workspace version (major*10000 + minor*100 + patch).
-VERSION="$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')"
+VERSION="$(grep '^version =' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')"
 VER_MAJOR="$(echo "$VERSION" | cut -d. -f1)"
 VER_MINOR="$(echo "$VERSION" | cut -d. -f2)"
 VER_PATCH="$(echo "$VERSION" | cut -d. -f3)"
