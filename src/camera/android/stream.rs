@@ -9,7 +9,6 @@ use crate::{
 use anyhow::{self as ah, Context as _, format_err as err};
 use rusb::{Context, DeviceHandle, TransferType, UsbContext, constants::LIBUSB_ERROR_TIMEOUT, ffi};
 use std::{
-    ffi::c_void,
     ptr::null_mut,
     slice,
     sync::{
@@ -30,7 +29,7 @@ const ISO_PACKETS_PER_TRANSFER: usize = 32;
 fn duration_to_timeval(duration: Duration) -> libc::timeval {
     let mut tv = libc::timeval {
         tv_sec: 0,
-        tv_usec: duration.as_micros() as i64,
+        tv_usec: duration.as_micros().try_into().expect("tv_usec"),
     };
     while tv.tv_usec >= 1_000_000 {
         tv.tv_sec += 1;
@@ -69,17 +68,16 @@ struct Collector {
 
 impl Collector {
     fn feed_payload(&mut self, chunk: &[u8]) {
-        let Some(frame_bytes) = self.reassembler.feed(chunk) else {
-            return;
-        };
-        let from_ui = self.from_ui.borrow().clone();
-        if let Some(frame) = decode_frame(
-            &mut self.renderer,
-            &frame_bytes,
-            WIDTH as usize * 2,
-            &from_ui,
-        ) {
-            let _ = self.to_ui.blocking_send(CaptureState::Frame(frame));
+        if let Some(frame_bytes) = self.reassembler.feed(chunk) {
+            let from_ui = self.from_ui.borrow().clone();
+            if let Some(frame) = decode_frame(
+                &mut self.renderer,
+                &frame_bytes,
+                WIDTH as usize * 2,
+                &from_ui,
+            ) {
+                let _ = self.to_ui.blocking_send(CaptureState::Frame(frame));
+            }
         }
     }
 }
@@ -127,17 +125,19 @@ impl FrameReassembler {
 /// Parses a UVC stream payload header, returning `(fid, eof, payload_data)`,
 /// or `None` for an empty/malformed header or a payload marked as an error.
 fn parse_payload_header(chunk: &[u8]) -> Option<(bool, bool, &[u8])> {
-    let header_len = *chunk.first()? as usize;
+    let header_len: usize = (*chunk.first()?).into();
     if header_len < 2 || header_len > chunk.len() {
-        return None;
+        None
+    } else {
+        let flags = chunk[1];
+        if flags & 0x40 == 0 {
+            let fid = flags & 0x01 != 0;
+            let eof = flags & 0x02 != 0;
+            Some((fid, eof, &chunk[header_len..]))
+        } else {
+            None // "Error Bit" set - drop this payload
+        }
     }
-    let flags = chunk[1];
-    if flags & 0x40 != 0 {
-        return None; // "Error Bit" set - drop this payload
-    }
-    let fid = flags & 0x01 != 0;
-    let eof = flags & 0x02 != 0;
-    Some((fid, eof, &chunk[header_len..]))
 }
 
 async fn run_bulk(
@@ -145,7 +145,11 @@ async fn run_bulk(
     negotiated: Negotiated,
     mut collector: Collector,
 ) -> ah::Result<()> {
-    let buf_size = (negotiated.max_payload_transfer_size as usize).max(16 * 1024);
+    let buf_size: usize = negotiated
+        .max_payload_transfer_size
+        .try_into()
+        .context("Buffer size")?;
+    let buf_size = buf_size.max(16 * 1024);
 
     loop {
         let handle = Arc::clone(&handle);
@@ -207,7 +211,7 @@ async fn run_iso(
     // AtomicPtr makes the pointer carrier Send + Sync for the async future;
     // callback access to the pointed-to state is still serialized below.
     let user_data = Arc::new(AtomicPtr::new(Box::into_raw(Box::new(IsoUserData {
-        collector: &mut collector as *mut Collector,
+        collector: &raw mut collector,
         stopping: false,
         outstanding: 0,
         device_gone: false,
@@ -230,10 +234,14 @@ async fn run_iso(
 
         (async move || -> ah::Result<()> {
             for _ in 0..ISO_TRANSFERS {
-                // SAFETY: `ISO_PACKETS_PER_TRANSFER` fits in a c_int, and the
-                // returned transfer is checked for null before further use.
-                let transfer =
-                    unsafe { ffi::libusb_alloc_transfer(ISO_PACKETS_PER_TRANSFER as i32) };
+                // SAFETY: The allocated size is sufficient.
+                let transfer = unsafe {
+                    ffi::libusb_alloc_transfer(
+                        ISO_PACKETS_PER_TRANSFER
+                            .try_into()
+                            .context("ISO_PACKETS_PER_TRANSFER")?,
+                    )
+                };
                 if transfer.is_null() {
                     return Err(err!("libusb_alloc_transfer() returned NULL"));
                 }
@@ -257,15 +265,17 @@ async fn run_iso(
                         handle.as_raw(),
                         negotiated.endpoint,
                         buffer.as_mut_ptr(),
-                        buffer.len() as i32,
-                        ISO_PACKETS_PER_TRANSFER as i32,
+                        buffer.len().try_into().context("Buffer length")?,
+                        ISO_PACKETS_PER_TRANSFER
+                            .try_into()
+                            .context("ISO_PACKETS_PER_TRANSFER")?,
                         iso_callback,
-                        user_data.load(Ordering::Relaxed) as *mut c_void,
+                        user_data.load(Ordering::Relaxed).cast(),
                         0,
                     );
                     let descs = iso_packet_descs(transfer);
                     for i in 0..ISO_PACKETS_PER_TRANSFER {
-                        (*descs.add(i)).length = packet_size as u32;
+                        (*descs.add(i)).length = packet_size.try_into().context("Packet size")?;
                     }
                 }
             }
@@ -300,10 +310,7 @@ async fn run_iso(
                 .await
                 .context("Tokio task failed")?;
 
-                if rc == LIBUSB_ERROR_TIMEOUT {
-                    continue;
-                }
-                if rc != 0 {
+                if rc != 0 && rc != LIBUSB_ERROR_TIMEOUT {
                     return Err(err!("libusb_handle_events() failed: {rc}"));
                 }
                 // SAFETY: only the callbacks (run from within the call above,
@@ -393,7 +400,7 @@ unsafe fn handle_iso_completion(transfer: *mut ffi::libusb_transfer) {
     // SAFETY: `transfer` is a valid, completed isochronous `libusb_transfer`.
     let (user_data, no_device) = unsafe {
         (
-            &mut *((*transfer).user_data as *mut IsoUserData), //FIXME
+            &mut *((*transfer).user_data as *mut IsoUserData),
             (*transfer).status == ffi::constants::LIBUSB_TRANSFER_NO_DEVICE,
         )
     };
@@ -438,7 +445,10 @@ unsafe fn process_iso_packets(transfer: *mut ffi::libusb_transfer, collector: *m
     // SAFETY: `transfer` is a valid, completed isochronous `libusb_transfer`.
     let (num_packets, descs, buffer) = unsafe {
         (
-            (*transfer).num_iso_packets as usize,
+            (*transfer)
+                .num_iso_packets
+                .try_into()
+                .expect("num_iso_packets"),
             iso_packet_descs(transfer),
             (*transfer).buffer,
         )
@@ -449,20 +459,20 @@ unsafe fn process_iso_packets(transfer: *mut ffi::libusb_transfer, collector: *m
     for i in 0..num_packets {
         // SAFETY: `i` is within the transfer's `num_iso_packets` descriptors.
         let desc = unsafe { &*descs.add(i) };
-        let packet_len = desc.length as usize;
+        let packet_len = desc.length.try_into().expect("packet length");
         if desc.status != ffi::constants::LIBUSB_TRANSFER_COMPLETED {
             continue;
         }
-        let len = (desc.actual_length as usize).min(packet_len);
-        if len == 0 {
-            continue;
+        let len: usize = desc.actual_length.try_into().expect("actual length");
+        let len = len.min(packet_len);
+        if len > 0 {
+            // SAFETY: packet `i` occupies the sub-slice
+            // `buffer[i * packet_len ..][.. packet_len]` of the transfer buffer,
+            // and libusb no longer writes to a completed transfer.
+            let data = unsafe { slice::from_raw_parts(buffer.add(i * packet_len), len) };
+            // SAFETY: the collector is only ever accessed from transfer
+            // callbacks, which run sequentially on this one thread.
+            unsafe { (*collector).feed_payload(data) };
         }
-        // SAFETY: packet `i` occupies the sub-slice
-        // `buffer[i * packet_len ..][.. packet_len]` of the transfer buffer,
-        // and libusb no longer writes to a completed transfer.
-        let data = unsafe { slice::from_raw_parts(buffer.add(i * packet_len), len) };
-        // SAFETY: the collector is only ever accessed from transfer
-        // callbacks, which run sequentially on this one thread.
-        unsafe { (*collector).feed_payload(data) };
     }
 }
