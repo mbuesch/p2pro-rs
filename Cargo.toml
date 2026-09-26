@@ -29,18 +29,27 @@ categories = [ "graphics", "hardware-support", "science" ]
 keywords = [ "infiray", "p2pro", "thermal", "camera" ]
 
 [workspace.dependencies]
+android_logger = "0.15"
 anyhow = "1"
+autocfg = "1"
 base64 = "0.23"
 chrono = "0.4"
+clap = "4"
 curveipo = { version = "1", features = [ "fastfloat" ] }
-image = { version = "0.25", default-features = false, features = [ "png" ] }
+dioxus = { version = "0.7", default-features = false }
+image = { version = "0.25", default-features = false }
+jni = "0.22"
+libc = "0.2"
+log = "0.4"
 movavg = "3"
 nusb = { version = "0.2", features = [ "tokio" ] }
 oxideav-avi = "0.0.10"
 oxideav-core = "0.1"
 oxideav-huffyuv = "0.0.3"
+rfd = { version = "0.17", default-features = false }
 rusb = { version = "0.9", features = [ "vendored" ] }
 tokio = { version = "1", default-features = false, features = [ "sync", "fs", "time", "rt-multi-thread" ] }
+v4l = "0.14"
 
 [dependencies]
 anyhow.workspace = true
@@ -56,19 +65,19 @@ p2pro-hw = { path = "p2pro-hw" }
 rusb = { workspace = true, optional = true }
 nusb = { workspace = true, optional = true }
 tokio.workspace = true
+libc.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-clap = { version = "4", features = [ "derive" ] }
-dioxus = { version = "0.7", default-features = false, features = [ "desktop", "minimal", "document" ] }
-rfd = { version = "0.17", default-features = false, features = [ "xdg-portal" ] }
-v4l = "0.14"
+clap = { workspace = true, features = [ "derive" ] }
+dioxus = { workspace = true, features = [ "desktop", "minimal", "document" ] }
+rfd = { workspace = true, features = [ "xdg-portal" ] }
+v4l.workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.15"
-dioxus = { version = "0.7", default-features = false, features = [ "mobile", "minimal", "document" ] }
-jni = "0.22"
-libc = "0.2"
-log = "0.4"
+android_logger.workspace = true
+dioxus = { workspace = true, features = [ "mobile", "minimal", "document" ] }
+jni.workspace = true
+log.workspace = true
 
 [features]
 default = [ "nusb", ]
@@ -76,8 +85,8 @@ rusb = [ "dep:rusb", "p2pro-hw/rusb" ]
 nusb = [ "dep:nusb", "p2pro-hw/nusb" ]
 
 [build-dependencies]
-autocfg = "1"
-image = { version = "0.25", default-features = false, features = [ "png" ] }
+autocfg.workspace = true
+image = { workspace = true, features = [ "png" ] }
 
 [profile.dev]
 debug = "limited"

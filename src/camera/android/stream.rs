@@ -5,6 +5,7 @@ use crate::{
     app::FromUi,
     camera::{CaptureState, HEIGHT, WIDTH, android::protocol::Negotiated, decode_frame},
     render::Renderer,
+    util::duration_to_timeval,
 };
 use anyhow::{self as ah, Context as _, format_err as err};
 use rusb::{
@@ -29,18 +30,6 @@ const FRAME_BYTES: usize = WIDTH as usize * 2 * (HEIGHT as usize * 2);
 const FRAME_TIMEOUT: Duration = Duration::from_millis(200);
 const ISO_TRANSFERS: usize = 4;
 const ISO_PACKETS_PER_TRANSFER: usize = 32;
-
-fn duration_to_timeval(duration: Duration) -> libc::timeval {
-    let mut tv = libc::timeval {
-        tv_sec: 0,
-        tv_usec: duration.as_micros().try_into().expect("tv_usec"),
-    };
-    while tv.tv_usec >= 1_000_000 {
-        tv.tv_sec += 1;
-        tv.tv_usec -= 1_000_000;
-    }
-    tv
-}
 
 pub async fn run(
     handle: Arc<AsyncMutex<DeviceHandle<Context>>>,
