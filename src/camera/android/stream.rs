@@ -7,7 +7,11 @@ use crate::{
     render::Renderer,
 };
 use anyhow::{self as ah, Context as _, format_err as err};
-use rusb::{Context, DeviceHandle, TransferType, UsbContext, constants::LIBUSB_ERROR_TIMEOUT, ffi};
+use rusb::{
+    Context, DeviceHandle, TransferType, UsbContext,
+    constants::{LIBUSB_ERROR_TIMEOUT, LIBUSB_TRANSFER_COMPLETED, LIBUSB_TRANSFER_NO_DEVICE},
+    ffi,
+};
 use std::{
     ptr::null_mut,
     slice,
@@ -401,7 +405,7 @@ unsafe fn handle_iso_completion(transfer: *mut ffi::libusb_transfer) {
     let (user_data, no_device) = unsafe {
         (
             &mut *((*transfer).user_data as *mut IsoUserData),
-            (*transfer).status == ffi::constants::LIBUSB_TRANSFER_NO_DEVICE,
+            (*transfer).status == LIBUSB_TRANSFER_NO_DEVICE,
         )
     };
 
@@ -415,18 +419,18 @@ unsafe fn handle_iso_completion(transfer: *mut ffi::libusb_transfer) {
         user_data.outstanding -= 1;
         // SAFETY: the transfer completed and is no longer used by libusb.
         unsafe { ffi::libusb_free_transfer(transfer) };
-        return;
-    }
-
-    // Do not resubmit once the device is confirmed gone or resubmission
-    // fails (e.g. the device was unplugged) - stop tracking this transfer.
-    // It leaks, but that is harmless: it only happens as the stream is
-    // already on its way out. (It must not be freed here, because
-    // `run_iso`'s teardown still cancels it.)
-    // SAFETY: `transfer` is a valid.
-    if no_device || unsafe { ffi::libusb_submit_transfer(transfer) } != 0 {
-        user_data.device_gone = true;
-        user_data.outstanding -= 1;
+    } else {
+        // Resubmit the transfer.
+        // Do not resubmit once the device is confirmed gone or resubmission
+        // fails (e.g. the device was unplugged) - stop tracking this transfer.
+        // It leaks, but that is harmless: it only happens as the stream is
+        // already on its way out. (It must not be freed here, because
+        // `run_iso`'s teardown still cancels it.)
+        // SAFETY: `transfer` is a valid.
+        if no_device || unsafe { ffi::libusb_submit_transfer(transfer) } != 0 {
+            user_data.device_gone = true;
+            user_data.outstanding -= 1;
+        }
     }
 }
 
@@ -460,19 +464,18 @@ unsafe fn process_iso_packets(transfer: *mut ffi::libusb_transfer, collector: *m
         // SAFETY: `i` is within the transfer's `num_iso_packets` descriptors.
         let desc = unsafe { &*descs.add(i) };
         let packet_len = desc.length.try_into().expect("packet length");
-        if desc.status != ffi::constants::LIBUSB_TRANSFER_COMPLETED {
-            continue;
-        }
-        let len: usize = desc.actual_length.try_into().expect("actual length");
-        let len = len.min(packet_len);
-        if len > 0 {
-            // SAFETY: packet `i` occupies the sub-slice
-            // `buffer[i * packet_len ..][.. packet_len]` of the transfer buffer,
-            // and libusb no longer writes to a completed transfer.
-            let data = unsafe { slice::from_raw_parts(buffer.add(i * packet_len), len) };
-            // SAFETY: the collector is only ever accessed from transfer
-            // callbacks, which run sequentially on this one thread.
-            unsafe { (*collector).feed_payload(data) };
+        if desc.status == LIBUSB_TRANSFER_COMPLETED {
+            let len: usize = desc.actual_length.try_into().expect("actual length");
+            let len = len.min(packet_len);
+            if len > 0 {
+                // SAFETY: packet `i` occupies the sub-slice
+                // `buffer[i * packet_len ..][.. packet_len]` of the transfer buffer,
+                // and libusb no longer writes to a completed transfer.
+                let data = unsafe { slice::from_raw_parts(buffer.add(i * packet_len), len) };
+                // SAFETY: the collector is only ever accessed from transfer
+                // callbacks, which run sequentially on this one thread.
+                unsafe { (*collector).feed_payload(data) };
+            }
         }
     }
 }
