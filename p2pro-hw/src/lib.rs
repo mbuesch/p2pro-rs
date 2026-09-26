@@ -269,6 +269,11 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
         self.handle
     }
 
+    /// Borrows the underlying USB device handle.
+    pub fn borrow_hw_access(&self) -> &H {
+        &self.handle
+    }
+
     /// Performs a vendor control OUT transfer to the given mailbox.
     async fn control_out(&mut self, mailbox: u16, data: &[u8]) -> ah::Result<()> {
         self.dev_accessed = true;
