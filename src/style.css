@@ -33,20 +33,20 @@ body {
 h1 {
     font-size: 0.9rem;
     font-weight: 600;
-    margin: 0 0 0 20%;
+    margin: 0;
     flex: 1;
+    text-align: center;
 }
 
 .hamburger {
-    position: fixed;
-    top: 35px;
-    right: 24px;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     justify-content: center;
     gap: 4px;
     width: 40px;
     height: 32px;
+    margin-left: 8px;
     color: #e8e8e8;
     background: #2a2d33;
     border: 1px solid #444;
@@ -205,6 +205,7 @@ h1 {
 .legend-bar {
     width: 8px;
     border: 1px solid #333;
+    background: linear-gradient(to top, var(--legend-stops));
 }
 
 .legend-labels {
@@ -359,10 +360,11 @@ h1 {
     .legend-bar {
         width: auto;
         height: 8px;
+        background: linear-gradient(to right, var(--legend-stops));
     }
 
     .legend-labels {
-        flex-direction: row;
+        flex-direction: row-reverse;
     }
 
     .controls {

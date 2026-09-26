@@ -36,12 +36,11 @@ pub fn build_color_lut() -> [[u8; 4]; 256] {
     lut
 }
 
-/// Renders the same palette as a CSS `linear-gradient`, hottest color on
-/// top, for the on-screen legend bar.
-pub fn css_gradient() -> String {
+/// Renders the same palette as CSS `linear-gradient` color stops.
+pub fn css_gradient_stops() -> String {
     let stops: Vec<String> = STOPS
         .iter()
         .map(|(t, [r, g, b])| format!("#{r:02x}{g:02x}{b:02x} {:.0}%", t * 100.0))
         .collect();
-    format!("linear-gradient(to top, {})", stops.join(", "))
+    stops.join(", ")
 }

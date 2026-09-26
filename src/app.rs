@@ -162,7 +162,7 @@ fn ThermalView(
     mut video_err: Signal<Option<String>>,
     mut video_recording: Signal<bool>,
 ) -> Element {
-    let gradient = colormap::css_gradient();
+    let gradient_stops = colormap::css_gradient_stops();
 
     let from_ui_tx = use_context::<watch::Sender<FromUi>>();
     let mut fix_min = use_signal(|| false);
@@ -451,7 +451,7 @@ fn ThermalView(
             }
             div { class: "legend",
                 div { class: "legend-main",
-                    div { class: "legend-bar", style: "background: {gradient};" }
+                    div { class: "legend-bar", style: "--legend-stops: {gradient_stops};" }
                     div { class: "legend-labels",
                         span { "{frame.meta.scale_max:.1}\u{00b0}C" }
                         span { "{frame.meta.scale_min:.1}\u{00b0}C" }
