@@ -16,7 +16,7 @@ use jni_bridge::{SessionGuard, UsbEvent};
 use p2pro_hw::CameraConfig;
 use rusb::UsbContext;
 use std::{collections::VecDeque, os::fd::RawFd, sync::Arc, time::Duration};
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{Mutex as AsyncMutex, mpsc, watch};
 
 /// Bounded ring buffer of log lines that are shown on screen.
 struct DebugLog {
@@ -132,7 +132,7 @@ async fn run_session(
     if let Err(e) = conf.set_default().await {
         eprintln!("Failed to set default configuration: {e}");
     }
-    let handle = Arc::new(conf.into_hw_access());
+    let handle = Arc::new(AsyncMutex::new(conf.into_hw_access()));
 
     let _ = to_ui
         .send(CaptureState::Info("Negotiating UVC format ...".to_string()))

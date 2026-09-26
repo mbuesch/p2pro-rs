@@ -21,7 +21,7 @@ use std::{
     },
     time::Duration,
 };
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{Mutex as AsyncMutex, mpsc, watch};
 
 /// Full raw YUYV frame size: video half on top, thermal half on the bottom.
 const FRAME_BYTES: usize = WIDTH as usize * 2 * (HEIGHT as usize * 2);
@@ -43,7 +43,7 @@ fn duration_to_timeval(duration: Duration) -> libc::timeval {
 }
 
 pub async fn run(
-    handle: Arc<DeviceHandle<Context>>,
+    handle: Arc<AsyncMutex<DeviceHandle<Context>>>,
     negotiated: Negotiated,
     to_ui: mpsc::Sender<CaptureState>,
     from_ui: watch::Receiver<FromUi>,
@@ -145,7 +145,7 @@ fn parse_payload_header(chunk: &[u8]) -> Option<(bool, bool, &[u8])> {
 }
 
 async fn run_bulk(
-    handle: Arc<DeviceHandle<Context>>,
+    handle: Arc<AsyncMutex<DeviceHandle<Context>>>,
     negotiated: Negotiated,
     mut collector: Collector,
 ) -> ah::Result<()> {
@@ -158,17 +158,21 @@ async fn run_bulk(
     loop {
         let handle = Arc::clone(&handle);
 
-        let res = tokio::task::spawn_blocking(move || {
-            let mut buf = vec![0_u8; buf_size];
-            let n = match handle.read_bulk(negotiated.endpoint, &mut buf, FRAME_TIMEOUT) {
-                Ok(n) => n,
-                Err(e) => return Err((e, collector)),
-            };
-            collector.feed_payload(&buf[..n]);
-            Ok(collector)
-        })
-        .await
-        .context("Tokio task failed")?;
+        let res = {
+            let handle = handle.lock_owned().await;
+
+            tokio::task::spawn_blocking(move || {
+                let mut buf = vec![0_u8; buf_size];
+                let n = match handle.read_bulk(negotiated.endpoint, &mut buf, FRAME_TIMEOUT) {
+                    Ok(n) => n,
+                    Err(e) => return Err((e, collector)),
+                };
+                collector.feed_payload(&buf[..n]);
+                Ok(collector)
+            })
+            .await
+            .context("Tokio task failed")?
+        };
 
         match res {
             Ok(c) => collector = c,
@@ -202,7 +206,7 @@ unsafe fn iso_packet_descs(
 }
 
 async fn run_iso(
-    handle: Arc<DeviceHandle<Context>>,
+    handle: Arc<AsyncMutex<DeviceHandle<Context>>>,
     negotiated: Negotiated,
     mut collector: Collector,
 ) -> ah::Result<()> {
@@ -238,6 +242,8 @@ async fn run_iso(
 
         (async move || -> ah::Result<()> {
             for _ in 0..ISO_TRANSFERS {
+                let handle_raw = AtomicPtr::new(Arc::clone(&handle).lock_owned().await.as_raw());
+
                 // SAFETY: The allocated size is sufficient.
                 let transfer = unsafe {
                     ffi::libusb_alloc_transfer(
@@ -266,7 +272,7 @@ async fn run_iso(
                 unsafe {
                     ffi::libusb_fill_iso_transfer(
                         transfer,
-                        handle.as_raw(),
+                        handle_raw.load(Ordering::Relaxed),
                         negotiated.endpoint,
                         buffer.as_mut_ptr(),
                         buffer.len().try_into().context("Buffer length")?,
@@ -299,12 +305,13 @@ async fn run_iso(
 
             loop {
                 let handle = Arc::clone(&handle);
+                let handle_context_raw = AtomicPtr::new(handle.lock().await.context().as_raw());
 
                 let rc = tokio::task::spawn_blocking(move || {
                     // SAFETY: `handle` is alive.
                     let rc = unsafe {
                         ffi::libusb_handle_events_timeout_completed(
-                            handle.context().as_raw(),
+                            handle_context_raw.load(Ordering::Relaxed),
                             &duration_to_timeval(FRAME_TIMEOUT),
                             null_mut(),
                         )
@@ -319,8 +326,7 @@ async fn run_iso(
                 }
                 // SAFETY: only the callbacks (run from within the call above,
                 // on this thread) ever write `device_gone`.
-                let user_data = user_data.load(Ordering::Relaxed);
-                if unsafe { (*user_data).device_gone } {
+                if unsafe { (*user_data.load(Ordering::Relaxed)).device_gone } {
                     return Err(err!("P2Pro USB device was disconnected"));
                 }
             }
@@ -330,7 +336,6 @@ async fn run_iso(
 
     // Shutdown and clean up.
 
-    let user_data = user_data.load(Ordering::Relaxed);
     let submitted = submitted.load(Ordering::Relaxed);
 
     // Teardown: ask every in-flight transfer to cancel, then keep pumping
@@ -340,7 +345,7 @@ async fn run_iso(
     // SAFETY (all `user_data` accesses below): callbacks only run from
     // within `libusb_handle_events_timeout_completed` on this thread, so
     // nothing accesses `user_data` concurrently with these accesses.
-    unsafe { (*user_data).stopping = true };
+    unsafe { (*user_data.load(Ordering::Relaxed)).stopping = true };
     for transfer in &transfers.lock().expect("Lock poisoned")[..submitted] {
         // SAFETY: `transfer` is valid; cancelling a transfer that already
         // completed (and was not resubmitted) merely returns NOT_FOUND.
@@ -353,11 +358,12 @@ async fn run_iso(
     // from within `libusb_handle_events_timeout_completed`) as the cancelled
     // transfers complete, which clippy can't see through from here.
     #[allow(clippy::while_immutable_condition)]
-    while unsafe { (*user_data).outstanding } > 0 {
-        // SAFETY: `handle` is alive.
+    while unsafe { (*user_data.load(Ordering::Relaxed)).outstanding } > 0 {
+        let context_raw = Arc::clone(&handle).lock_owned().await.context().as_raw();
+        // SAFETY: the handle keeps this context alive.
         unsafe {
             ffi::libusb_handle_events_timeout_completed(
-                handle.context().as_raw(),
+                context_raw,
                 &duration_to_timeval(Duration::from_secs(1)),
                 std::ptr::null_mut(),
             );
@@ -373,7 +379,7 @@ async fn run_iso(
     }
 
     // SAFETY: all callbacks have run; nothing references `user_data` anymore.
-    drop(unsafe { Box::from_raw(user_data) });
+    drop(unsafe { Box::from_raw(user_data.load(Ordering::Relaxed)) });
 
     run_result
 }

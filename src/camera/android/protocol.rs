@@ -9,6 +9,7 @@ use rusb::{
     Context, DeviceHandle, Direction, Error, Recipient, RequestType, TransferType, request_type,
 };
 use std::{sync::Arc, time::Duration};
+use tokio::sync::Mutex as AsyncMutex;
 
 const CC_VIDEO: u8 = 0x0e;
 const SC_VIDEOSTREAMING: u8 = 0x02;
@@ -97,7 +98,9 @@ impl StreamingControl {
 /// Negotiates a YUYV stream at `WIDTH`x`HEIGHT*2` with the P2Pro and leaves
 /// its VideoStreaming interface set to the chosen alternate setting, ready
 /// for reading off `Negotiated::endpoint`.
-pub async fn negotiate(handle: Arc<DeviceHandle<Context>>) -> ah::Result<Negotiated> {
+pub async fn negotiate(handle: Arc<AsyncMutex<DeviceHandle<Context>>>) -> ah::Result<Negotiated> {
+    let handle = handle.lock_owned().await;
+
     tokio::task::spawn_blocking(move || {
         let config = handle
             .device()
