@@ -14,8 +14,8 @@ use crate::{
 use anyhow::{self as ah, Context as _};
 use jni_bridge::{SessionGuard, UsbEvent};
 use p2pro_hw::CameraConfig;
-use rusb::{DeviceHandle, UsbContext};
-use std::{collections::VecDeque, os::fd::RawFd, time::Duration};
+use rusb::UsbContext;
+use std::{collections::VecDeque, os::fd::RawFd, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, watch};
 
 /// Bounded ring buffer of log lines that are shown on screen.
@@ -107,7 +107,7 @@ async fn run_session(
     to_ui: mpsc::Sender<CaptureState>,
     from_ui: watch::Receiver<FromUi>,
 ) -> ah::Result<()> {
-    let session_guard = SessionGuard::new(token);
+    let _session_guard = SessionGuard::new(token);
 
     let context = rusb::Context::new().context("Failed to create a libusb context")?;
 
@@ -132,26 +132,13 @@ async fn run_session(
     if let Err(e) = conf.set_default().await {
         eprintln!("Failed to set default configuration: {e}");
     }
-    let handle = conf.into_hw_access();
+    let handle = Arc::new(conf.into_hw_access());
 
-    let task = tokio::task::spawn_blocking(move || {
-        run_session_blocking(session_guard, handle, to_ui, from_ui)
-    });
-    match task.await {
-        Ok(result) => result,
-        Err(join_err) => Err(ah::Error::new(join_err).context("USB capture thread panicked")),
-    }
-}
-
-/// USB Video Class session (negotiation + streaming).
-fn run_session_blocking(
-    _session_guard: SessionGuard,
-    handle: DeviceHandle<rusb::Context>,
-    to_ui: mpsc::Sender<CaptureState>,
-    from_ui: watch::Receiver<FromUi>,
-) -> ah::Result<()> {
-    let _ = to_ui.blocking_send(CaptureState::Info("Negotiating UVC format ...".to_string()));
-    let negotiated = protocol::negotiate(&handle)
+    let _ = to_ui
+        .send(CaptureState::Info("Negotiating UVC format ...".to_string()))
+        .await;
+    let negotiated = protocol::negotiate(Arc::clone(&handle))
+        .await
         .context("USB Video Class negotiation with the P2Pro failed")?;
     log::info!(
         "P2Pro: streaming over USB {:?} endpoint 0x{:02x} ({} bytes/payload, {} bytes/frame)",
@@ -160,11 +147,12 @@ fn run_session_blocking(
         negotiated.max_payload_transfer_size,
         negotiated.max_video_frame_size,
     );
-    let _ = to_ui.blocking_send(CaptureState::Info(format!(
-        "UVC negotiated: {:?} endpoint 0x{:02x} ({} bytes/payload)\n\
-         Waiting for frames ...",
-        negotiated.transfer_type, negotiated.endpoint, negotiated.max_payload_transfer_size,
-    )));
+    let _ = to_ui
+        .send(CaptureState::Info(format!(
+            "UVC negotiated: {:?} endpoint 0x{:02x} ({} bytes/payload)\nWaiting for frames ...",
+            negotiated.transfer_type, negotiated.endpoint, negotiated.max_payload_transfer_size,
+        )))
+        .await;
 
-    stream::run(&handle, &negotiated, to_ui, from_ui)
+    stream::run(handle, negotiated, to_ui, from_ui).await
 }

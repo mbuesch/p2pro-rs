@@ -1,15 +1,14 @@
 //! Reads UVC payload data off the negotiated endpoint (bulk or isochronous)
 //! and reassembles it into complete thermal frames.
 
-use super::protocol::Negotiated;
 use crate::{
     app::FromUi,
-    camera::{CaptureState, HEIGHT, WIDTH, decode_frame},
+    camera::{CaptureState, HEIGHT, WIDTH, android::protocol::Negotiated, decode_frame},
     render::Renderer,
 };
-use anyhow::{self as ah, format_err as err};
+use anyhow::{self as ah, Context as _, format_err as err};
 use rusb::{Context, DeviceHandle, TransferType, UsbContext, ffi};
-use std::{ffi::c_void, time::Duration};
+use std::{ffi::c_void, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, watch};
 
 /// Full raw YUYV frame size: video half on top, thermal half on the bottom.
@@ -19,13 +18,13 @@ const BULK_TIMEOUT: Duration = Duration::from_secs(2);
 const ISO_TRANSFERS: usize = 4;
 const ISO_PACKETS_PER_TRANSFER: usize = 32;
 
-pub fn run(
-    handle: &DeviceHandle<Context>,
-    negotiated: &Negotiated,
+pub async fn run(
+    handle: Arc<DeviceHandle<Context>>,
+    negotiated: Negotiated,
     to_ui: mpsc::Sender<CaptureState>,
     from_ui: watch::Receiver<FromUi>,
 ) -> ah::Result<()> {
-    let mut collector = Collector {
+    let collector = Collector {
         reassembler: FrameReassembler::new(FRAME_BYTES),
         renderer: Renderer::new(),
         to_ui,
@@ -33,8 +32,12 @@ pub fn run(
     };
 
     match negotiated.transfer_type {
-        TransferType::Bulk => run_bulk(handle, negotiated, &mut collector),
-        TransferType::Isochronous => run_iso(handle, negotiated, &mut collector),
+        TransferType::Bulk => run_bulk(handle, negotiated, collector).await,
+        TransferType::Isochronous => {
+            tokio::task::spawn_blocking(move || run_iso(handle, negotiated, collector))
+                .await
+                .context("Tokio task failed")?
+        }
         other => Err(err!(
             "Unsupported UVC video endpoint transfer type: {other:?}"
         )),
@@ -122,17 +125,21 @@ fn parse_payload_header(chunk: &[u8]) -> Option<(bool, bool, &[u8])> {
     Some((fid, eof, &chunk[header_len..]))
 }
 
-fn run_bulk(
-    handle: &DeviceHandle<Context>,
-    negotiated: &Negotiated,
-    collector: &mut Collector,
+async fn run_bulk(
+    handle: Arc<DeviceHandle<Context>>,
+    negotiated: Negotiated,
+    mut collector: Collector,
 ) -> ah::Result<()> {
-    let buf_size = (negotiated.max_payload_transfer_size as usize).max(16 * 1024);
-    let mut buf = vec![0u8; buf_size];
-    loop {
-        let n = handle.read_bulk(negotiated.endpoint, &mut buf, BULK_TIMEOUT)?;
-        collector.feed_payload(&buf[..n]);
-    }
+    tokio::task::spawn_blocking(move || {
+        let buf_size = (negotiated.max_payload_transfer_size as usize).max(16 * 1024);
+        let mut buf = vec![0u8; buf_size];
+        loop {
+            let n = handle.read_bulk(negotiated.endpoint, &mut buf, BULK_TIMEOUT)?;
+            collector.feed_payload(&buf[..n]);
+        }
+    })
+    .await
+    .context("Tokio task failed")?
 }
 
 struct IsoUserData {
@@ -159,9 +166,9 @@ unsafe fn iso_packet_descs(
 }
 
 fn run_iso(
-    handle: &DeviceHandle<Context>,
-    negotiated: &Negotiated,
-    collector: &mut Collector,
+    handle: Arc<DeviceHandle<Context>>,
+    negotiated: Negotiated,
+    mut collector: Collector,
 ) -> ah::Result<()> {
     let ctx_ptr = handle.context().as_raw();
     let packet_size = negotiated.packet_size.max(1);
@@ -171,7 +178,7 @@ fn run_iso(
     // *every* access of its own: an access through a `Box` or `&mut` here
     // would invalidate the callbacks' pointer under Rust's aliasing rules.
     let user_data = Box::into_raw(Box::new(IsoUserData {
-        collector: collector as *mut Collector,
+        collector: &mut collector as *mut Collector,
         stopping: false,
         outstanding: 0,
         device_gone: false,

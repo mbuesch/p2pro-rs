@@ -8,7 +8,7 @@ use anyhow::{self as ah, Context as _, format_err as err};
 use rusb::{
     Context, DeviceHandle, Direction, Error, Recipient, RequestType, TransferType, request_type,
 };
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 const CC_VIDEO: u8 = 0x0e;
 const SC_VIDEOSTREAMING: u8 = 0x02;
@@ -97,115 +97,121 @@ impl StreamingControl {
 /// Negotiates a YUYV stream at `WIDTH`x`HEIGHT*2` with the P2Pro and leaves
 /// its VideoStreaming interface set to the chosen alternate setting, ready
 /// for reading off `Negotiated::endpoint`.
-pub fn negotiate(handle: &DeviceHandle<Context>) -> ah::Result<Negotiated> {
-    let device = handle.device();
-    let config = device
-        .active_config_descriptor()
-        .context("Failed to read the active USB configuration descriptor")?;
+pub async fn negotiate(handle: Arc<DeviceHandle<Context>>) -> ah::Result<Negotiated> {
+    tokio::task::spawn_blocking(move || {
+        let config = handle
+            .device()
+            .active_config_descriptor()
+            .context("Failed to read the active USB configuration descriptor")?;
 
-    let mut vs_interface_number = None;
-    let mut probe = StreamingControl::default();
+        let mut vs_interface_number = None;
+        let mut probe = StreamingControl::default();
 
-    'a: for interface in config.interfaces() {
-        for alt in interface.descriptors() {
-            if alt.class_code() != CC_VIDEO || alt.sub_class_code() != SC_VIDEOSTREAMING {
-                continue;
-            }
-            let Some((format_index, frame_index, frame_interval)) =
-                parse_vs_descriptors(alt.extra())
-            else {
-                continue;
-            };
-            vs_interface_number = Some(alt.interface_number());
-            probe.format_index = format_index;
-            probe.frame_index = frame_index;
-            probe.frame_interval = frame_interval;
-            break 'a;
-        }
-    }
-    let vs_interface_number = vs_interface_number.ok_or_else(|| {
-        err!(
-            "Could not find a VideoStreaming interface offering YUYV at {}x{}",
-            WIDTH,
-            HEIGHT * 2
-        )
-    })?;
-
-    // Detach the driver, if any.
-    match handle.kernel_driver_active(vs_interface_number) {
-        Ok(true) => handle.detach_kernel_driver(vs_interface_number).context(
-            "Failed to detach the kernel/usbfs driver from the VideoStreaming interface",
-        )?,
-        Ok(false) => {}
-        Err(Error::NotSupported | Error::NotFound) => {}
-        Err(e) => return Err(e).context("Failed to query the VideoStreaming kernel driver state"),
-    }
-
-    handle
-        .claim_interface(vs_interface_number)
-        .context("Failed to claim the VideoStreaming interface")?;
-
-    set_cur(handle, vs_interface_number, VS_PROBE_CONTROL, &probe)
-        .context("VS_PROBE_CONTROL (SET_CUR) failed")?;
-    if let Ok(readback) = get_cur(handle, vs_interface_number, VS_PROBE_CONTROL) {
-        probe = readback;
-    }
-    set_cur(handle, vs_interface_number, VS_COMMIT_CONTROL, &probe)
-        .context("VS_COMMIT_CONTROL (SET_CUR) failed")?;
-
-    let required = (probe.max_payload_transfer_size as usize).max(1);
-    let mut chosen: Option<(u8, u8, TransferType, usize)> = None;
-    for interface in config.interfaces() {
-        if interface.number() != vs_interface_number {
-            continue;
-        }
-        for alt in interface.descriptors() {
-            if alt.setting_number() == 0 {
-                continue; // the zero-bandwidth idle setting
-            }
-            let Some(ep) = alt
-                .endpoint_descriptors()
-                .find(|e| e.direction() == Direction::In)
-            else {
-                continue;
-            };
-            let transfer_type = ep.transfer_type();
-            if !matches!(
-                transfer_type,
-                TransferType::Isochronous | TransferType::Bulk
-            ) {
-                continue;
-            }
-            let size = packet_size_bytes(ep.transfer_type(), ep.max_packet_size());
-            let candidate = (alt.setting_number(), ep.address(), transfer_type, size);
-            let is_better = match chosen {
-                None => true,
-                Some((_, _, _, best_size)) => match (size >= required, best_size >= required) {
-                    (true, false) => true,
-                    (true, true) => size < best_size,
-                    (false, true) => false,
-                    (false, false) => size > best_size,
-                },
-            };
-            if is_better {
-                chosen = Some(candidate);
+        'a: for interface in config.interfaces() {
+            for alt in interface.descriptors() {
+                if alt.class_code() != CC_VIDEO || alt.sub_class_code() != SC_VIDEOSTREAMING {
+                    continue;
+                }
+                let Some((format_index, frame_index, frame_interval)) =
+                    parse_vs_descriptors(alt.extra())
+                else {
+                    continue;
+                };
+                vs_interface_number = Some(alt.interface_number());
+                probe.format_index = format_index;
+                probe.frame_index = frame_index;
+                probe.frame_interval = frame_interval;
+                break 'a;
             }
         }
-    }
-    let (alt_setting, endpoint, transfer_type, packet_size) =
-        chosen.ok_or_else(|| err!("No usable VideoStreaming alternate setting/endpoint found"))?;
+        let vs_interface_number = vs_interface_number.ok_or_else(|| {
+            err!(
+                "Could not find a VideoStreaming interface offering YUYV at {}x{}",
+                WIDTH,
+                HEIGHT * 2
+            )
+        })?;
 
-    handle
-        .set_alternate_setting(vs_interface_number, alt_setting)
-        .context("Failed to select the VideoStreaming alternate setting")?;
+        // Detach the driver, if any.
+        match handle.kernel_driver_active(vs_interface_number) {
+            Ok(true) => handle.detach_kernel_driver(vs_interface_number).context(
+                "Failed to detach the kernel/usbfs driver from the VideoStreaming interface",
+            )?,
+            Ok(false) => {}
+            Err(Error::NotSupported | Error::NotFound) => {}
+            Err(e) => {
+                return Err(e).context("Failed to query the VideoStreaming kernel driver state");
+            }
+        }
 
-    Ok(Negotiated {
-        endpoint,
-        transfer_type,
-        packet_size,
-        max_payload_transfer_size: probe.max_payload_transfer_size,
-        max_video_frame_size: probe.max_video_frame_size,
+        handle
+            .claim_interface(vs_interface_number)
+            .context("Failed to claim the VideoStreaming interface")?;
+
+        set_cur(&handle, vs_interface_number, VS_PROBE_CONTROL, &probe)
+            .context("VS_PROBE_CONTROL (SET_CUR) failed")?;
+        if let Ok(readback) = get_cur(&handle, vs_interface_number, VS_PROBE_CONTROL) {
+            probe = readback;
+        }
+        set_cur(&handle, vs_interface_number, VS_COMMIT_CONTROL, &probe)
+            .context("VS_COMMIT_CONTROL (SET_CUR) failed")?;
+
+        let required = (probe.max_payload_transfer_size as usize).max(1);
+        let mut chosen: Option<(u8, u8, TransferType, usize)> = None;
+        for interface in config.interfaces() {
+            if interface.number() != vs_interface_number {
+                continue;
+            }
+            for alt in interface.descriptors() {
+                if alt.setting_number() == 0 {
+                    continue; // the zero-bandwidth idle setting
+                }
+                let Some(ep) = alt
+                    .endpoint_descriptors()
+                    .find(|e| e.direction() == Direction::In)
+                else {
+                    continue;
+                };
+                let transfer_type = ep.transfer_type();
+                if !matches!(
+                    transfer_type,
+                    TransferType::Isochronous | TransferType::Bulk
+                ) {
+                    continue;
+                }
+                let size = packet_size_bytes(ep.transfer_type(), ep.max_packet_size());
+                let candidate = (alt.setting_number(), ep.address(), transfer_type, size);
+                let is_better = match chosen {
+                    None => true,
+                    Some((_, _, _, best_size)) => match (size >= required, best_size >= required) {
+                        (true, false) => true,
+                        (true, true) => size < best_size,
+                        (false, true) => false,
+                        (false, false) => size > best_size,
+                    },
+                };
+                if is_better {
+                    chosen = Some(candidate);
+                }
+            }
+        }
+        let (alt_setting, endpoint, transfer_type, packet_size) = chosen
+            .ok_or_else(|| err!("No usable VideoStreaming alternate setting/endpoint found"))?;
+
+        handle
+            .set_alternate_setting(vs_interface_number, alt_setting)
+            .context("Failed to select the VideoStreaming alternate setting")?;
+
+        Ok(Negotiated {
+            endpoint,
+            transfer_type,
+            packet_size,
+            max_payload_transfer_size: probe.max_payload_transfer_size,
+            max_video_frame_size: probe.max_video_frame_size,
+        })
     })
+    .await
+    .context("Tokio task failed")?
 }
 
 /// Scans one VideoStreaming alternate setting's class-specific descriptors
