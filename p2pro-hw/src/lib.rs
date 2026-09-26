@@ -270,8 +270,13 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
     }
 
     /// Borrows the underlying USB device handle.
-    pub fn borrow_hw_access(&self) -> &H {
+    pub fn hw_access(&self) -> &H {
         &self.handle
+    }
+
+    /// Borrows the underlying USB device handle.
+    pub fn hw_access_mut(&mut self) -> &mut H {
+        &mut self.handle
     }
 
     /// Performs a vendor control OUT transfer to the given mailbox.
