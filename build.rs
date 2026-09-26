@@ -2,6 +2,7 @@ use std::{env, fs, path::PathBuf};
 
 fn build_icon() {
     let png_path = "assets/icon-128x128.png";
+    println!("cargo:rerun-if-changed={png_path}");
 
     let bytes = fs::read(png_path).expect("Failed to read window icon PNG");
     let image = image::load_from_memory(&bytes).expect("Failed to decode window icon PNG");
