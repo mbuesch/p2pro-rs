@@ -25,7 +25,7 @@ cp android/res/xml/device_filter.xml "$ANDROID_RES/xml/"
 mkdir -p "$ANDROID_APP"
 cp android/proguard-jni-keep.pro "$ANDROID_APP/"
 
-dx build --android --target aarch64-linux-android --release
+dx build --android --target aarch64-linux-android --no-default-features --features rusb --release
 
 # Fix the generated display name (dx derives it from the binary name).
 sed -i 's|<string name="app_name">P2ProRs</string>|<string name="app_name">InfiRay P2Pro Rs</string>|' \

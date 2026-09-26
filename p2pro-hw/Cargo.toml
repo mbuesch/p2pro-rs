@@ -18,6 +18,6 @@ nusb = { workspace = true, optional = true }
 tokio.workspace = true
 
 [features]
-default = [ "rusb", ]
+default = []
 rusb = [ "dep:rusb" ]
 nusb = [ "dep:nusb" ]

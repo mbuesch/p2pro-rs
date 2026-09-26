@@ -60,19 +60,52 @@ async fn probe_devices(
     }
 }
 
-fn find_usb_device(busnum: u8, devnum: u8) -> ah::Result<rusb::Device<rusb::GlobalContext>> {
-    for dev in rusb::devices()?.iter() {
-        if dev.bus_number() == busnum && dev.address() == devnum {
-            return Ok(dev);
+struct UsbDeviceInfo {
+    #[cfg(feature = "rusb")]
+    usb_device: rusb::Device<rusb::GlobalContext>,
+    #[cfg(feature = "nusb")]
+    usb_device: nusb::DeviceInfo,
+}
+
+impl UsbDeviceInfo {
+    #[cfg(feature = "rusb")]
+    async fn find(busnum: u8, devnum: u8) -> ah::Result<UsbDeviceInfo> {
+        for dev in rusb::devices()?.iter() {
+            if dev.bus_number() == busnum && dev.address() == devnum {
+                return Ok(UsbDeviceInfo { usb_device: dev });
+            }
         }
+        Err(err!("USB device {busnum}:{devnum} not found."))
     }
-    Err(err!("USB device {busnum}:{devnum} not found."))
+
+    #[cfg(feature = "nusb")]
+    async fn find(busnum: u8, devnum: u8) -> ah::Result<UsbDeviceInfo> {
+        for dev in nusb::list_devices().await? {
+            if dev.busnum() == busnum && dev.device_address() == devnum {
+                return Ok(UsbDeviceInfo { usb_device: dev });
+            }
+        }
+        Err(err!("USB device {busnum}:{devnum} not found."))
+    }
+
+    #[cfg(feature = "rusb")]
+    async fn open(&self) -> ah::Result<rusb::DeviceHandle<rusb::GlobalContext>> {
+        self.usb_device.open().context("Failed to open USB device")
+    }
+
+    #[cfg(feature = "nusb")]
+    async fn open(&self) -> ah::Result<nusb::Device> {
+        self.usb_device
+            .open()
+            .await
+            .context("Failed to open USB device")
+    }
 }
 
 struct V4lDevice {
     device: Device,
     #[allow(dead_code)]
-    usb_device: rusb::Device<rusb::GlobalContext>,
+    usb_device: UsbDeviceInfo,
     capabilities: Capabilities,
     fmt: Format,
     to_ui: mpsc::Sender<CaptureState>,
@@ -143,8 +176,9 @@ impl V4lDevice {
             ));
         }
 
-        let usb_device =
-            find_usb_device(usb_busnum, usb_devnum).context("Failed to find USB device")?;
+        let usb_device = UsbDeviceInfo::find(usb_busnum, usb_devnum)
+            .await
+            .context("Failed to find USB device")?;
 
         let requested = Format::new(WIDTH, HEIGHT * 2, FourCC::new(b"YUYV"));
         let fmt = device.set_format(&requested)?;
@@ -163,7 +197,7 @@ impl V4lDevice {
             ));
         }
 
-        let usb_handle = usb_device.open().context("Failed to open USB device")?;
+        let usb_handle = usb_device.open().await?;
         let mut conf = CameraConfig::from_hw_access(usb_handle);
         let summary = conf
             .device_info_summary()
