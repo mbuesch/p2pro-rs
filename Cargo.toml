@@ -35,6 +35,7 @@ chrono = "0.4"
 curveipo = { version = "1", features = [ "fastfloat" ] }
 image = { version = "0.25", default-features = false, features = [ "png" ] }
 movavg = "3"
+nusb = "0.2"
 oxideav-avi = "0.0.10"
 oxideav-core = "0.1"
 oxideav-huffyuv = "0.0.3"

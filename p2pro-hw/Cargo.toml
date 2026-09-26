@@ -14,8 +14,10 @@ keywords.workspace = true
 [dependencies]
 anyhow.workspace = true
 rusb = { workspace = true, optional = true }
+nusb = { workspace = true, optional = true }
 tokio.workspace = true
 
 [features]
 default = [ "rusb", ]
 rusb = [ "dep:rusb" ]
+nusb = [ "dep:nusb" ]

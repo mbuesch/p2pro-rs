@@ -3,7 +3,10 @@
 #![forbid(unsafe_code)]
 
 use anyhow::{self as ah, Context as _, format_err as err};
-use std::time::{Duration, Instant};
+use std::{
+    future::Future,
+    time::{Duration, Instant},
+};
 
 /// P2Pro camera configuration hardware access abstraction.
 pub trait CameraConfigHwAccess {
@@ -15,7 +18,7 @@ pub trait CameraConfigHwAccess {
         index: u16,
         buf: &[u8],
         timeout: Duration,
-    ) -> ah::Result<usize>;
+    ) -> impl Future<Output = ah::Result<usize>> + Send;
 
     fn read_control(
         &self,
@@ -25,12 +28,12 @@ pub trait CameraConfigHwAccess {
         index: u16,
         buf: &mut [u8],
         timeout: Duration,
-    ) -> ah::Result<usize>;
+    ) -> impl Future<Output = ah::Result<usize>> + Send;
 }
 
 #[cfg(feature = "rusb")]
 impl<C: rusb::UsbContext> CameraConfigHwAccess for rusb::DeviceHandle<C> {
-    fn write_control(
+    async fn write_control(
         &self,
         request_type: u8,
         request: u8,
@@ -43,7 +46,7 @@ impl<C: rusb::UsbContext> CameraConfigHwAccess for rusb::DeviceHandle<C> {
             .map_err(|e| err!("USB write_control failed: {e}"))
     }
 
-    fn read_control(
+    async fn read_control(
         &self,
         request_type: u8,
         request: u8,
@@ -54,6 +57,88 @@ impl<C: rusb::UsbContext> CameraConfigHwAccess for rusb::DeviceHandle<C> {
     ) -> ah::Result<usize> {
         self.read_control(request_type, request, value, index, buf, timeout)
             .map_err(|e| err!("USB read_control failed: {e}"))
+    }
+}
+
+#[cfg(feature = "nusb")]
+impl CameraConfigHwAccess for nusb::Device {
+    async fn write_control(
+        &self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        buf: &[u8],
+        timeout: Duration,
+    ) -> ah::Result<usize> {
+        let control_type = match (request_type >> 5) & 0x03 {
+            0 => nusb::transfer::ControlType::Standard,
+            1 => nusb::transfer::ControlType::Class,
+            2 => nusb::transfer::ControlType::Vendor,
+            _ => return Err(err!("Invalid control type")),
+        };
+        let recipient = match request_type & 0x1F {
+            0 => nusb::transfer::Recipient::Device,
+            1 => nusb::transfer::Recipient::Interface,
+            2 => nusb::transfer::Recipient::Endpoint,
+            3 => nusb::transfer::Recipient::Other,
+            _ => return Err(err!("Invalid recipient")),
+        };
+        self.control_out(
+            nusb::transfer::ControlOut {
+                control_type,
+                recipient,
+                request,
+                value,
+                index,
+                data: buf,
+            },
+            timeout,
+        )
+        .await
+        .map(|_| buf.len())
+        .map_err(|e| err!("USB control_out failed: {e}"))
+    }
+
+    async fn read_control(
+        &self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        buf: &mut [u8],
+        timeout: Duration,
+    ) -> ah::Result<usize> {
+        let control_type = match (request_type >> 5) & 0x03 {
+            0 => nusb::transfer::ControlType::Standard,
+            1 => nusb::transfer::ControlType::Class,
+            2 => nusb::transfer::ControlType::Vendor,
+            _ => return Err(err!("Invalid control type")),
+        };
+        let recipient = match request_type & 0x1F {
+            0 => nusb::transfer::Recipient::Device,
+            1 => nusb::transfer::Recipient::Interface,
+            2 => nusb::transfer::Recipient::Endpoint,
+            3 => nusb::transfer::Recipient::Other,
+            _ => return Err(err!("Invalid recipient")),
+        };
+        let length = buf.len();
+        let received = self
+            .control_in(
+                nusb::transfer::ControlIn {
+                    control_type,
+                    recipient,
+                    request,
+                    value,
+                    index,
+                    length: length.try_into().map_err(|_| err!("control_in too long"))?,
+                },
+                timeout,
+            )
+            .await
+            .map_err(|e| err!("USB control_in failed: {e}"))?;
+        buf.copy_from_slice(&received[..length]);
+        Ok(length)
     }
 }
 
@@ -292,6 +377,7 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
                 data,
                 TRANSFER_TIMEOUT,
             )
+            .await
             .context("USB control OUT transfer failed")?;
         if written != data.len() {
             return Err(err!(
@@ -315,6 +401,7 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
                 buf,
                 TRANSFER_TIMEOUT,
             )
+            .await
             .context("USB control IN transfer failed")?;
         if read != buf.len() {
             return Err(err!(
