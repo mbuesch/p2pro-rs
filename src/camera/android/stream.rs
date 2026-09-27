@@ -230,9 +230,9 @@ async fn run_iso(
         let submitted = Arc::clone(&submitted);
 
         (async move || -> ah::Result<()> {
-            for _ in 0..ISO_TRANSFERS {
-                let handle_raw = AtomicPtr::new(Arc::clone(&handle).lock_owned().await.as_raw());
+            let handle_guard = handle.lock().await;
 
+            for _ in 0..ISO_TRANSFERS {
                 // SAFETY: The allocated size is sufficient.
                 let transfer = unsafe {
                     ffi::libusb_alloc_transfer(
@@ -261,7 +261,7 @@ async fn run_iso(
                 unsafe {
                     ffi::libusb_fill_iso_transfer(
                         transfer,
-                        handle_raw.load(Ordering::Relaxed),
+                        handle_guard.as_raw(),
                         negotiated.endpoint,
                         buffer.as_mut_ptr(),
                         buffer.len().try_into().context("Buffer length")?,
@@ -292,9 +292,13 @@ async fn run_iso(
                 unsafe { (*user_data).outstanding += 1 };
             }
 
+            drop(handle_guard); // unlock
+
             loop {
                 let handle = Arc::clone(&handle);
-                let handle_context_raw = AtomicPtr::new(handle.lock().await.context().as_raw());
+
+                let handle_guard = handle.lock().await;
+                let handle_context_raw = AtomicPtr::new(handle_guard.context().as_raw());
 
                 let rc = tokio::task::spawn_blocking(move || {
                     // SAFETY: `handle` is alive.
@@ -309,6 +313,8 @@ async fn run_iso(
                 })
                 .await
                 .context("Tokio task failed")?;
+
+                drop(handle_guard); // unlock
 
                 if rc != 0 && rc != LIBUSB_ERROR_TIMEOUT {
                     return Err(err!("libusb_handle_events() failed: {rc}"));
@@ -348,11 +354,11 @@ async fn run_iso(
     // transfers complete, which clippy can't see through from here.
     #[allow(clippy::while_immutable_condition)]
     while unsafe { (*user_data.load(Ordering::Relaxed)).outstanding } > 0 {
-        let context_raw = Arc::clone(&handle).lock_owned().await.context().as_raw();
+        let handle_guard = handle.lock().await;
         // SAFETY: the handle keeps this context alive.
         unsafe {
             ffi::libusb_handle_events_timeout_completed(
-                context_raw,
+                handle_guard.context().as_raw(),
                 &duration_to_timeval(Duration::from_secs(1)),
                 std::ptr::null_mut(),
             );
