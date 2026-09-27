@@ -5,10 +5,11 @@
 //! is the raw thermal data, where every 2 bytes that would normally be a
 //! YUYV luma/chroma pair are instead a little-endian 16-bit raw sample.
 
-use super::{CaptureState, HEIGHT, WIDTH, decode_frame};
 use crate::{
     app::FromUi,
-    camera::{PRODUCT_ID, VENDOR_ID},
+    camera::{
+        CaptureState, HEIGHT, PRODUCT_ID, VENDOR_ID, WIDTH, apply_config_updates, decode_frame,
+    },
     render::Renderer,
 };
 use anyhow::{self as ah, Context as _, format_err as err};
@@ -16,10 +17,10 @@ use p2pro_hw::CameraConfig;
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex as StdMutex},
     time::Duration,
 };
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{Mutex as AsyncMutex, mpsc, watch};
 use v4l::{
     Device, Format, FourCC,
     buffer::Type,
@@ -109,8 +110,9 @@ struct V4lDevice {
     capabilities: Capabilities,
     fmt: Format,
     to_ui: mpsc::Sender<CaptureState>,
-    renderer: Mutex<Renderer>,
+    renderer: StdMutex<Renderer>,
     from_ui: watch::Receiver<FromUi>,
+    config_task: tokio::task::JoinHandle<()>,
 }
 
 impl V4lDevice {
@@ -210,6 +212,8 @@ impl V4lDevice {
         if let Err(e) = conf.set_default().await {
             eprintln!("Failed to set default configuration: {e}");
         }
+        let usb_handle = Arc::new(AsyncMutex::new(conf.into_hw_access()));
+        let config_task = tokio::spawn(apply_config_updates(usb_handle, from_ui.clone()));
 
         Ok(Self {
             device,
@@ -217,8 +221,9 @@ impl V4lDevice {
             capabilities: caps,
             fmt,
             to_ui,
-            renderer: Mutex::new(Renderer::new()),
+            renderer: StdMutex::new(Renderer::new()),
             from_ui,
+            config_task,
         })
     }
 
@@ -238,6 +243,12 @@ impl V4lDevice {
                 let _ = self.to_ui.send(CaptureState::Frame(frame)).await;
             }
         }
+    }
+}
+
+impl Drop for V4lDevice {
+    fn drop(&mut self) {
+        self.config_task.abort();
     }
 }
 

@@ -20,6 +20,7 @@ const CSS: &str = include_str!("style.css");
 pub struct FromUi {
     pub min_temp: Option<f32>,
     pub max_temp: Option<f32>,
+    pub high_gain: Option<bool>,
 }
 
 #[component]
@@ -30,6 +31,8 @@ pub fn App() -> Element {
     let running = use_signal(|| true);
     let mut video_err = use_signal(|| None::<String>);
     let mut video_recording = use_signal(|| false);
+    let mut high_gain = use_signal(|| true);
+    let from_ui_tx = use_context::<watch::Sender<FromUi>>();
 
     use_hook(|| {
         let recorder = recorder.clone();
@@ -70,6 +73,12 @@ pub fn App() -> Element {
         })
     });
 
+    let onchange_high_gain = move |evt: Event<FormData>| {
+        let enabled = evt.checked();
+        high_gain.set(enabled);
+        from_ui_tx.send_modify(|settings| settings.high_gain = Some(enabled));
+    };
+
     let current = state();
     let mut menu_open = use_signal(|| false);
 
@@ -96,9 +105,14 @@ pub fn App() -> Element {
                         class: "menu-panel",
                         onclick: move |evt| evt.stop_propagation(),
                         p { class: "text", "Menu" }
-                        button { class: "control-btn", "Dummy action 1" }
-                        button { class: "control-btn", "Dummy action 2" }
-                        button { class: "control-btn", "Dummy action 3" }
+                        label { class: "menu-checkbox",
+                            input {
+                                r#type: "checkbox",
+                                checked: high_gain(),
+                                onchange: onchange_high_gain,
+                            }
+                            "High gain"
+                        }
                     }
                 }
             }
@@ -675,8 +689,8 @@ fn step_temp(text: &str, current_temp: f32, delta: f32) -> String {
 
 /// Sends the current state of the manual-range widgets to the capture thread.
 fn send_from_ui(from_ui_tx: &watch::Sender<FromUi>, min: (bool, &str), max: (bool, &str)) {
-    let _ = from_ui_tx.send(FromUi {
-        min_temp: if min.0 { parse_temp(min.1) } else { None },
-        max_temp: if max.0 { parse_temp(max.1) } else { None },
+    from_ui_tx.send_modify(|settings| {
+        settings.min_temp = if min.0 { parse_temp(min.1) } else { None };
+        settings.max_temp = if max.0 { parse_temp(max.1) } else { None };
     });
 }

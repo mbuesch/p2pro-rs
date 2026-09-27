@@ -95,6 +95,22 @@ h1 {
     color: #e8e8e8;
 }
 
+.menu-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    padding: 0 8px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.menu-checkbox input {
+    width: 18px;
+    height: 18px;
+    accent-color: #ffb347;
+}
+
 .status {
     font-size: 0.8rem;
     line-height: 1.35;

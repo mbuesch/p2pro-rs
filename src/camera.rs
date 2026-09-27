@@ -6,8 +6,9 @@ use crate::{
     render::{RenderedFrame, Renderer},
     util::FastFloat as _,
 };
-use std::path::Path;
-use tokio::sync::{mpsc, watch};
+use p2pro_hw::{CameraConfig, CameraConfigHwAccess};
+use std::{path::Path, sync::Arc};
+use tokio::sync::{Mutex as AsyncMutex, mpsc, watch};
 
 #[cfg(target_os = "android")]
 pub mod android;
@@ -66,6 +67,33 @@ impl Camera {
                 assert!(device_path.is_none());
                 android::capture_loop(to_ui, from_ui).await;
             }
+        }
+    }
+}
+
+/// Applies config changes from the UI while this USB camera session is active.
+pub async fn apply_config_updates<H>(
+    usb_handle: Arc<AsyncMutex<H>>,
+    mut from_ui: watch::Receiver<FromUi>,
+) where
+    H: CameraConfigHwAccess + Send + 'static,
+{
+    let mut config = CameraConfig::from_hw_access(usb_handle);
+    let mut prev_high_gain = None;
+    loop {
+        let high_gain = from_ui.borrow().high_gain;
+
+        if prev_high_gain != high_gain
+            && let Some(high_gain) = high_gain
+        {
+            match config.set_high_gain(high_gain).await {
+                Ok(()) => prev_high_gain = Some(high_gain),
+                Err(err) => eprintln!("Failed to set high-gain mode: {err}"),
+            }
+        }
+
+        if from_ui.changed().await.is_err() {
+            break;
         }
     }
 }
