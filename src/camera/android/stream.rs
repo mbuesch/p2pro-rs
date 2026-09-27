@@ -22,7 +22,10 @@ use std::{
     },
     time::Duration,
 };
-use tokio::sync::{Mutex as AsyncMutex, mpsc, watch};
+use tokio::{
+    sync::{Mutex as AsyncMutex, mpsc, watch},
+    time::sleep,
+};
 
 /// Full raw YUYV frame size: video half on top, thermal half on the bottom.
 const FRAME_BYTES: usize = WIDTH as usize * 2 * (HEIGHT as usize * 2);
@@ -30,6 +33,7 @@ const FRAME_BYTES: usize = WIDTH as usize * 2 * (HEIGHT as usize * 2);
 const FRAME_TIMEOUT: Duration = Duration::from_millis(200);
 const ISO_TRANSFERS: usize = 4;
 const ISO_PACKETS_PER_TRANSFER: usize = 32;
+const MAX_ERROR_RETRIES: usize = 5;
 
 pub async fn run(
     handle: Arc<AsyncMutex<DeviceHandle<Context>>>,
@@ -144,6 +148,7 @@ async fn run_bulk(
         .context("Buffer size")?;
     let buf_size = buf_size.max(16 * 1024);
 
+    let mut errors = 0_usize;
     loop {
         let handle = Arc::clone(&handle);
 
@@ -164,9 +169,19 @@ async fn run_bulk(
         };
 
         match res {
-            Ok(c) => collector = c,
-            Err((rusb::Error::Timeout, c)) => collector = c,
-            Err((e, _c)) => return Err(e).context("Bulk transfer failed")?,
+            Ok(c) | Err((rusb::Error::Timeout, c)) => {
+                errors = errors.saturating_sub(1);
+                collector = c;
+            }
+            Err((e, c)) => {
+                errors = errors.saturating_add(1);
+                if errors > MAX_ERROR_RETRIES {
+                    return Err(e).context("Bulk transfer failed")?;
+                }
+                eprintln!("Bulk transfer failed, retrying...");
+                sleep(Duration::from_millis(1)).await;
+                collector = c;
+            }
         }
     }
 }
@@ -294,6 +309,7 @@ async fn run_iso(
 
             drop(handle_guard); // unlock
 
+            let mut errors = 0_usize;
             loop {
                 let handle = Arc::clone(&handle);
 
@@ -317,7 +333,16 @@ async fn run_iso(
                 drop(handle_guard); // unlock
 
                 if rc != 0 && rc != LIBUSB_ERROR_TIMEOUT {
-                    return Err(err!("libusb_handle_events() failed: {rc}"));
+                    errors = errors.saturating_add(1);
+                    if errors > MAX_ERROR_RETRIES {
+                        return Err(err!("libusb_handle_events() failed: {rc}"));
+                    } else {
+                        eprintln!("libusb_handle_events() failed: {rc}, retrying...");
+                        sleep(Duration::from_millis(1)).await;
+                    }
+                }
+                if rc == 0 {
+                    errors = errors.saturating_sub(1);
                 }
                 // SAFETY: only the callbacks (run from within the call above,
                 // on this thread) ever write `device_gone`.
