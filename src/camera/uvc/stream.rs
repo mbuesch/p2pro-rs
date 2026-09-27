@@ -178,7 +178,7 @@ async fn run_bulk(
                 if errors > MAX_ERROR_RETRIES {
                     return Err(e).context("Bulk transfer failed")?;
                 }
-                eprintln!("Bulk transfer failed, retrying...");
+                log::error!("Bulk transfer failed, retrying...");
                 sleep(Duration::from_millis(1)).await;
                 collector = c;
             }
@@ -337,7 +337,7 @@ async fn run_iso(
                     if errors > MAX_ERROR_RETRIES {
                         return Err(err!("libusb_handle_events() failed: {rc}"));
                     } else {
-                        eprintln!("libusb_handle_events() failed: {rc}, retrying...");
+                        log::error!("libusb_handle_events() failed: {rc}, retrying...");
                         sleep(Duration::from_millis(1)).await;
                     }
                 }

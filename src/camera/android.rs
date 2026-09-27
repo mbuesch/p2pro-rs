@@ -8,7 +8,7 @@ pub mod jni_bridge;
 use crate::{
     app::FromUi,
     camera::{
-        CaptureState, PRODUCT_ID, VENDOR_ID,
+        CaptureState, PRODUCT_ID, VENDOR_ID, apply_config_updates,
         uvc::{protocol, stream},
     },
 };
@@ -119,17 +119,18 @@ async fn run_session(
 ) -> ah::Result<()> {
     let _session_guard = SessionGuard::new(token);
 
+    // Open the USB device via libusb.
     let context = rusb::Context::new().context("Failed to create a libusb context")?;
-
     // SAFETY: `fd` is a USB device file descriptor.
     let handle = unsafe { context.open_device_with_fd(fd.as_raw_fd()) }
         .context("Failed to wrap the Android USB file descriptor")?;
     let _ = to_ui
         .send(CaptureState::Info(
-            "USB device opened via libusb; Configuring P2Pro hardware ...".to_string(),
+            "USB device opened; Configuring P2Pro hardware ...".to_string(),
         ))
         .await;
 
+    // Initially configure the camera.
     let mut conf = CameraConfig::from_hw_access(handle);
     let summary = conf
         .device_info_summary()
@@ -144,6 +145,7 @@ async fn run_session(
     }
     let handle = Arc::new(AsyncMutex::new(conf.into_hw_access()));
 
+    // Fire up UVC (USB Video Class) streaming.
     let _ = to_ui
         .send(CaptureState::Info("Negotiating UVC format ...".to_string()))
         .await;
@@ -159,10 +161,21 @@ async fn run_session(
     );
     let _ = to_ui
         .send(CaptureState::Info(format!(
-            "UVC negotiated: {:?} endpoint 0x{:02x} ({} bytes/payload)\nWaiting for frames ...",
-            negotiated.transfer_type, negotiated.endpoint, negotiated.max_payload_transfer_size,
+            "UVC negotiated: {:?} endpoint 0x{:02x}\nWaiting for frames ...",
+            negotiated.transfer_type, negotiated.endpoint,
         )))
         .await;
 
-    stream::run(handle, negotiated, to_ui, from_ui).await
+    // Configuration task.
+    let config_task = tokio::spawn(apply_config_updates(Arc::clone(&handle), from_ui.clone()));
+
+    // Main loop: UVC streaming.
+    // This blocks for the duration of normal operation.
+    let result = stream::run(handle, negotiated, to_ui, from_ui).await;
+
+    // Shutdown.
+    config_task.abort();
+    let _ = config_task.await;
+
+    result
 }
