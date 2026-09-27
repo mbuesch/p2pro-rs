@@ -1,4 +1,4 @@
-//! P2Pro camera hardware access.
+//! InfiRay P2Pro Thermal Camera - Hardware access.
 
 #![forbid(unsafe_code)]
 
@@ -11,6 +11,7 @@ use std::{
 
 /// P2Pro camera configuration hardware access abstraction.
 pub trait CameraConfigHwAccess {
+    /// Send a USB control-out request.
     fn write_control(
         &self,
         request_type: u8,
@@ -21,6 +22,7 @@ pub trait CameraConfigHwAccess {
         timeout: Duration,
     ) -> impl Future<Output = ah::Result<usize>> + Send;
 
+    /// Send a USB control-in request.
     fn read_control(
         &self,
         request_type: u8,
@@ -318,10 +320,8 @@ enum TpdParam {
     /// Object distance.
     Distance = 0,
     /// Apparent reflected background temperature.
-    #[allow(dead_code)]
     ReflectedTemperature = 1,
     /// Temperature of the intervening atmosphere.
-    #[allow(dead_code)]
     AtmosphericTemperature = 2,
     /// Object emissivity.
     Emissivity = 3,
@@ -362,7 +362,7 @@ fn long_command_params(p3: u32, p4: u32) -> [u8; 8] {
     params
 }
 
-/// P2Pro configuration channel.
+/// InfiRay P2Pro Thermal Camera hardware configuration.
 ///
 /// Wraps an opened USB device handle and speaks the vendor command protocol.
 pub struct CameraConfig<H: CameraConfigHwAccess> {
@@ -609,6 +609,22 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
         Ok(result)
     }
 
+    /// Read a TPD parameter. Return the raw value.
+    async fn tpd_get(&mut self, param: TpdParam) -> ah::Result<u16> {
+        let data = self.long_read(CMD_TPD, param as u16, 0, 2).await?;
+        let bytes: [u8; 2] = data.as_slice().try_into().context("Short TPD response")?;
+        Ok(u16::from_be_bytes(bytes))
+    }
+
+    /// Write a raw TPD parameter value.
+    ///
+    /// The caller must keep the value within the parameter's range,
+    /// see [`TpdParam`].
+    async fn tpd_set(&mut self, param: TpdParam, value: u16) -> ah::Result<()> {
+        self.long_write(CMD_TPD | SET_FLAG, param as u16, value.into(), 0, 0)
+            .await
+    }
+
     /// Reset the device to ROM settings.
     ///
     /// Maintenance operation only: the device re-enumerates afterwards and
@@ -685,20 +701,26 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
         self.standard_read_u16be(CMD_CURRENT_VTEMP).await
     }
 
-    /// Read a TPD parameter. Return the raw value.
-    async fn tpd_get(&mut self, param: TpdParam) -> ah::Result<u16> {
-        let data = self.long_read(CMD_TPD, param as u16, 0, 2).await?;
-        let bytes: [u8; 2] = data.as_slice().try_into().context("Short TPD response")?;
-        Ok(u16::from_be_bytes(bytes))
+    /// Read the apparent reflected background temperature in Celsius.
+    pub async fn reflected_temperature(&mut self) -> ah::Result<f32> {
+        Ok(f32::from(self.tpd_get(TpdParam::ReflectedTemperature).await?) - 273.15)
     }
 
-    /// Write a raw TPD parameter value.
-    ///
-    /// The caller must keep the value within the parameter's range,
-    /// see [`TpdParam`].
-    async fn tpd_set(&mut self, param: TpdParam, value: u16) -> ah::Result<()> {
-        self.long_write(CMD_TPD | SET_FLAG, param as u16, value.into(), 0, 0)
-            .await
+    /// Set the reflected background temperature in Celsius.
+    pub async fn set_reflected_temperature(&mut self, temperature: f32) -> ah::Result<()> {
+        let raw = ((temperature + 273.15).round() as u16).clamp(0, u16::MAX);
+        self.tpd_set(TpdParam::ReflectedTemperature, raw).await
+    }
+
+    /// Read the atmospheric temperature in Celsius.
+    pub async fn atmospheric_temperature(&mut self) -> ah::Result<f32> {
+        Ok(f32::from(self.tpd_get(TpdParam::AtmosphericTemperature).await?) - 273.15)
+    }
+
+    /// Set the atmospheric temperature in Celsius.
+    pub async fn set_atmospheric_temperature(&mut self, temperature: f32) -> ah::Result<()> {
+        let raw = ((temperature + 273.15).round() as u16).clamp(0, u16::MAX);
+        self.tpd_set(TpdParam::AtmosphericTemperature, raw).await
     }
 
     /// Read the object emissivity (0.0 - 1.0).
@@ -785,6 +807,8 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
     pub async fn set_default(&mut self) -> ah::Result<()> {
         self.set_emissivity(1.0).await?;
         self.set_atmospheric_transmittance(1.0).await?;
+        self.set_atmospheric_temperature(26.0).await?;
+        self.set_reflected_temperature(26.0).await?;
         self.set_distance(0.2).await?;
         self.set_high_gain(true).await?;
         self.set_palette(Palette::WhiteHot).await?;

@@ -6,9 +6,13 @@ use crate::{
     render::{RenderedFrame, Renderer},
     util::FastFloat as _,
 };
+use anyhow as ah;
 use p2pro_hw::{CameraConfig, CameraConfigHwAccess};
-use std::{path::Path, sync::Arc};
-use tokio::sync::{Mutex as AsyncMutex, mpsc, watch};
+use std::{path::Path, sync::Arc, time::Duration};
+use tokio::{
+    sync::{Mutex as AsyncMutex, mpsc, watch},
+    time::interval,
+};
 
 #[cfg(target_os = "android")]
 pub mod android;
@@ -36,7 +40,18 @@ pub enum CaptureState {
     Connecting,
     Info(String),
     Error(String),
+    Telemetry(CameraTelemetry),
     Frame(RenderedFrame),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CameraTelemetry {
+    pub shutter_vtemp: u16,
+    pub current_vtemp: u16,
+    pub reflected_temperature: f32,
+    pub atmospheric_temperature: f32,
+    pub emissivity: f32,
+    pub atmospheric_transmittance: f32,
 }
 
 pub struct Camera;
@@ -75,25 +90,105 @@ impl Camera {
 pub async fn apply_config_updates<H>(
     usb_handle: Arc<AsyncMutex<H>>,
     mut from_ui: watch::Receiver<FromUi>,
+    to_ui: mpsc::Sender<CaptureState>,
 ) where
     H: CameraConfigHwAccess + Send + 'static,
 {
     let mut config = CameraConfig::from_hw_access(usb_handle);
-    let mut prev_high_gain = None;
-    loop {
-        let high_gain = from_ui.borrow().high_gain;
 
-        if prev_high_gain != high_gain
-            && let Some(high_gain) = high_gain
+    let mut prev_high_gain = None;
+    let mut prev_emissivity = None;
+    let mut prev_atmospheric_transmittance = None;
+    let mut prev_atmospheric_temperature = None;
+    let mut prev_reflected_temperature = None;
+    let mut prev_distance = None;
+
+    let mut read_interval = interval(Duration::from_secs(1));
+
+    loop {
+        let settings = from_ui.borrow_and_update().clone();
+
+        if prev_high_gain != settings.high_gain
+            && let Some(high_gain) = settings.high_gain
         {
             match config.set_high_gain(high_gain).await {
                 Ok(()) => prev_high_gain = Some(high_gain),
-                Err(err) => eprintln!("Failed to set high-gain mode: {err}"),
+                Err(err) => log::error!("Failed to set high-gain mode: {err}"),
             }
         }
 
-        if from_ui.changed().await.is_err() {
-            break;
+        if prev_emissivity != settings.emissivity
+            && let Some(emissivity) = settings.emissivity
+        {
+            match config.set_emissivity(emissivity).await {
+                Ok(()) => prev_emissivity = Some(emissivity),
+                Err(err) => log::error!("Failed to set emissivity: {err}"),
+            }
+        }
+
+        if prev_atmospheric_transmittance != settings.atmospheric_transmittance
+            && let Some(transmittance) = settings.atmospheric_transmittance
+        {
+            match config.set_atmospheric_transmittance(transmittance).await {
+                Ok(()) => prev_atmospheric_transmittance = Some(transmittance),
+                Err(err) => log::error!("Failed to set atmospheric transmittance: {err}"),
+            }
+        }
+
+        if prev_atmospheric_temperature != settings.atmospheric_temperature
+            && let Some(temperature) = settings.atmospheric_temperature
+        {
+            match config.set_atmospheric_temperature(temperature).await {
+                Ok(()) => prev_atmospheric_temperature = Some(temperature),
+                Err(err) => log::error!("Failed to set atmospheric temperature: {err}"),
+            }
+        }
+
+        if prev_reflected_temperature != settings.reflected_temperature
+            && let Some(temperature) = settings.reflected_temperature
+        {
+            match config.set_reflected_temperature(temperature).await {
+                Ok(()) => prev_reflected_temperature = Some(temperature),
+                Err(err) => log::error!("Failed to set reflected temperature: {err}"),
+            }
+        }
+
+        if prev_distance != settings.distance
+            && let Some(distance) = settings.distance
+        {
+            match config.set_distance(distance).await {
+                Ok(()) => prev_distance = Some(distance),
+                Err(err) => log::error!("Failed to set object distance: {err}"),
+            }
+        }
+
+        tokio::select! {
+            biased;
+            _ = read_interval.tick() => {
+                let telemetry: ah::Result<_> = async {
+                    let telemetry = CameraTelemetry {
+                        shutter_vtemp: config.shutter_vtemp().await?,
+                        current_vtemp: config.current_vtemp().await?,
+                        reflected_temperature: config.reflected_temperature().await?,
+                        atmospheric_temperature: config.atmospheric_temperature().await?,
+                        emissivity: config.emissivity().await?,
+                        atmospheric_transmittance: config.atmospheric_transmittance().await?,
+                    };
+                    Ok(telemetry)
+                }
+                .await;
+                match telemetry {
+                    Ok(telemetry) => {
+                        let _ = to_ui.try_send(CaptureState::Telemetry(telemetry));
+                    }
+                    Err(err) => log::error!("Failed to read camera telemetry: {err}"),
+                }
+            }
+            changed = from_ui.changed() => {
+                if changed.is_err() {
+                    break;
+                }
+            }
         }
     }
 }

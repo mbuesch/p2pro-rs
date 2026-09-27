@@ -213,7 +213,11 @@ impl V4lDevice {
             eprintln!("Failed to set default configuration: {e}");
         }
         let usb_handle = Arc::new(AsyncMutex::new(conf.into_hw_access()));
-        let config_task = tokio::spawn(apply_config_updates(usb_handle, from_ui.clone()));
+        let config_task = tokio::spawn(apply_config_updates(
+            usb_handle,
+            from_ui.clone(),
+            to_ui.clone(),
+        ));
 
         Ok(Self {
             device,

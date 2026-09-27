@@ -3,7 +3,7 @@
 //! feeds this UI through shared state.
 
 use crate::{
-    camera::CaptureState,
+    camera::{CameraTelemetry, CaptureState},
     colormap,
     render::{RenderedFrame, RenderedFrameMeta},
     save::{pick_video_target, save_frame_png},
@@ -21,6 +21,11 @@ pub struct FromUi {
     pub min_temp: Option<f32>,
     pub max_temp: Option<f32>,
     pub high_gain: Option<bool>,
+    pub emissivity: Option<f32>,
+    pub atmospheric_transmittance: Option<f32>,
+    pub atmospheric_temperature: Option<f32>,
+    pub reflected_temperature: Option<f32>,
+    pub distance: Option<f32>,
 }
 
 #[component]
@@ -28,6 +33,7 @@ pub fn App() -> Element {
     let from_cam = use_context::<Arc<AsyncMutex<mpsc::Receiver<CaptureState>>>>();
     let recorder = use_context::<VideoRecorder>();
     let mut state = use_signal(|| CaptureState::Connecting);
+    let mut telemetry = use_signal(|| None::<CameraTelemetry>);
     let running = use_signal(|| true);
     let mut video_err = use_signal(|| None::<String>);
     let mut video_recording = use_signal(|| false);
@@ -43,15 +49,18 @@ pub fn App() -> Element {
                     eprintln!("Error: Capture thread has exited");
                     break;
                 };
-                if let CaptureState::Frame(frame) = &snapshot {
-                    if !running() {
-                        continue; // While stopped, drop incoming frames.
+                match snapshot {
+                    CaptureState::Telemetry(reading) => telemetry.set(Some(reading)),
+                    snapshot => {
+                        if let CaptureState::Frame(frame) = &snapshot {
+                            if !running() {
+                                continue; // While stopped, drop incoming frames.
+                            }
+                            recorder.push_frame(frame);
+                        }
+                        state.set(snapshot);
                     }
-                    // Push to frame recorder.
-                    recorder.push_frame(frame);
                 }
-                // To live-view.
-                state.set(snapshot);
             }
         })
     });
@@ -73,14 +82,78 @@ pub fn App() -> Element {
         })
     });
 
-    let onchange_high_gain = move |evt: Event<FormData>| {
-        let enabled = evt.checked();
-        high_gain.set(enabled);
-        from_ui_tx.send_modify(|settings| settings.high_gain = Some(enabled));
+    let onchange_high_gain = {
+        let tx = from_ui_tx.clone();
+        move |evt: Event<FormData>| {
+            let enabled = evt.checked();
+            high_gain.set(enabled);
+            tx.send_modify(|settings| settings.high_gain = Some(enabled));
+        }
     };
+    let mut emissivity_text = use_signal(|| "1.00".to_string());
+    let mut atmos_trans_text = use_signal(|| "1.00".to_string());
+    let mut atmos_temp_text = use_signal(|| "26.0".to_string());
+    let mut reflected_temp_text = use_signal(|| "26.0".to_string());
+    let mut distance_text = use_signal(|| "0.20".to_string());
+    let on_emissivity_input = {
+        let tx = from_ui_tx.clone();
+        move |evt: Event<FormData>| {
+            let text = evt.value();
+            emissivity_text.set(text.clone());
+            tx.send_modify(|settings| settings.emissivity = parse_temp(&text));
+        }
+    };
+    let on_atmos_trans_input = {
+        let tx = from_ui_tx.clone();
+        move |evt: Event<FormData>| {
+            let text = evt.value();
+            atmos_trans_text.set(text.clone());
+            tx.send_modify(|settings| settings.atmospheric_transmittance = parse_temp(&text));
+        }
+    };
+    let on_atmos_temp_input = {
+        let tx = from_ui_tx.clone();
+        move |evt: Event<FormData>| {
+            let text = evt.value();
+            atmos_temp_text.set(text.clone());
+            tx.send_modify(|settings| settings.atmospheric_temperature = parse_temp(&text));
+        }
+    };
+    let on_reflected_temp_input = {
+        let tx = from_ui_tx.clone();
+        move |evt: Event<FormData>| {
+            let text = evt.value();
+            reflected_temp_text.set(text.clone());
+            tx.send_modify(|settings| settings.reflected_temperature = parse_temp(&text));
+        }
+    };
+    let on_distance_input = {
+        let tx = from_ui_tx.clone();
+        move |evt: Event<FormData>| {
+            let text = evt.value();
+            distance_text.set(text.clone());
+            tx.send_modify(|settings| settings.distance = parse_temp(&text));
+        }
+    };
+
+    // XXX: Unused handlers
+    let _ = on_emissivity_input;
+    let _ = on_atmos_trans_input;
+    let _ = on_atmos_temp_input;
+    let _ = on_reflected_temp_input;
+    let _ = on_distance_input;
 
     let current = state();
     let mut menu_open = use_signal(|| false);
+    let telemetry = telemetry();
+    let shutter_vtemp = telemetry
+        .as_ref()
+        .map(|reading| reading.shutter_vtemp.to_string())
+        .unwrap_or_else(|| "--".to_string());
+    let current_vtemp = telemetry
+        .as_ref()
+        .map(|reading| reading.current_vtemp.to_string())
+        .unwrap_or_else(|| "--".to_string());
 
     rsx! {
         style { "{CSS}" }
@@ -105,6 +178,59 @@ pub fn App() -> Element {
                         class: "menu-panel",
                         onclick: move |evt| evt.stop_propagation(),
                         p { class: "text", "Menu" }
+                        /*
+                        div { class: "menu-field",
+                            label { "Emissivity" }
+                            input {
+                                r#type: "number",
+                                min: "0",
+                                max: "1",
+                                step: "0.05",
+                                value: "{emissivity_text}",
+                                oninput: on_emissivity_input,
+                            }
+                        }
+                        div { class: "menu-field",
+                            label { "Atmospheric transmittance" }
+                            input {
+                                r#type: "number",
+                                min: "0",
+                                max: "1",
+                                step: "0.05",
+                                value: "{atmos_trans_text}",
+                                oninput: on_atmos_trans_input,
+                            }
+                        }
+                        div { class: "menu-field",
+                            label { "Atmospheric temperature" }
+                            input {
+                                r#type: "number",
+                                step: "0.5",
+                                value: "{atmos_temp_text}",
+                                oninput: on_atmos_temp_input,
+                            }
+                        }
+                        div { class: "menu-field",
+                            label { "Reflected temperature" }
+                            input {
+                                r#type: "number",
+                                step: "0.5",
+                                value: "{reflected_temp_text}",
+                                oninput: on_reflected_temp_input,
+                            }
+                        }
+                        div { class: "menu-field",
+                            label { "Object distance (m)" }
+                            input {
+                                r#type: "number",
+                                min: "0",
+                                max: "200",
+                                step: "0.01",
+                                value: "{distance_text}",
+                                oninput: on_distance_input,
+                            }
+                        }
+                        */
                         label { class: "menu-checkbox",
                             input {
                                 r#type: "checkbox",
@@ -112,6 +238,10 @@ pub fn App() -> Element {
                                 onchange: onchange_high_gain,
                             }
                             "High gain"
+                        }
+                        div { class: "menu-readings",
+                            p { "Shutter VTemp: {shutter_vtemp}" }
+                            p { "Current VTemp: {current_vtemp}" }
                         }
                     }
                 }
@@ -132,6 +262,7 @@ pub fn App() -> Element {
                         }
                     }
                 }
+                CaptureState::Telemetry(_) => rsx! {},
                 CaptureState::Frame(frame) => rsx! {
                     ThermalView {
                         frame,
@@ -465,7 +596,10 @@ fn ThermalView(
             }
             div { class: "legend",
                 div { class: "legend-main",
-                    div { class: "legend-bar", style: "--legend-stops: {gradient_stops};" }
+                    div {
+                        class: "legend-bar",
+                        style: "--legend-stops: {gradient_stops};",
+                    }
                     div { class: "legend-labels",
                         span { "{frame.meta.scale_max:.1}\u{00b0}C" }
                         span { "{frame.meta.scale_min:.1}\u{00b0}C" }

@@ -57,15 +57,16 @@ base64.workspace = true
 chrono.workspace = true
 curveipo.workspace = true
 image.workspace = true
+libc.workspace = true
+log.workspace = true
 movavg.workspace = true
+nusb = { workspace = true, optional = true }
 oxideav-avi.workspace = true
 oxideav-core.workspace = true
 oxideav-huffyuv.workspace = true
 p2pro-hw = { path = "p2pro-hw", default-features = false, features = [ "tokio" ] }
 rusb = { workspace = true, optional = true }
-nusb = { workspace = true, optional = true }
 tokio.workspace = true
-libc.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 clap = { workspace = true, features = [ "derive" ] }
@@ -77,7 +78,6 @@ v4l.workspace = true
 android_logger.workspace = true
 dioxus = { workspace = true, features = [ "mobile", "minimal", "document" ] }
 jni.workspace = true
-log.workspace = true
 
 [features]
 default = [ "nusb", ]

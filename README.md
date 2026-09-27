@@ -19,16 +19,6 @@ Features:
 - **Linux**
 - **Android** (9 or later)
 
-## How it talks to the camera
-
-The P2Pro shows up as a standard UVC webcam and requests raw `YUYV` frames at 256x384.
-The top half of that buffer is a normal 8-bit preview (ignored here) and the bottom half is actually raw 16-bit temperature samples packed into what looks like YUYV bytes.
-
-How that YUYV stream is obtained depends on the platform:
-
-- **Linux desktop**: opened directly via Video4Linux2.
-- **Android**: Android does not expose a V4L2. Instead, the app drives the P2Pro's USB Video Class protocol itself.
-
 ## Running on Linux
 
 First install [Rust](https://www.rust-lang.org/tools/install) and then build the app:
@@ -86,7 +76,7 @@ Note that the APK is signed with a debug key and is only provided on a best-effo
 It should work properly, but it's not regularly tested.
 If there are problems with the pre-built APK, please file an issue.
 
-### If you want to build the app yourself (recommended), follow these steps
+### If you want to build the app yourself, follow these steps
 
 First install [Rust](https://www.rust-lang.org/tools/install) on the build PC (Linux).
 
@@ -122,7 +112,7 @@ Plug in your Android device, ensure Developer Mode, USB debugging and Sideloadin
 ./android-install.sh
 ```
 
-## Video format
+## Video format or recorded video files
 
 The application always records to lossless HuffYUV AVI format.
 This creates rather large video files compared to lossy formats, but preserves the full quality of the thermal video.
@@ -142,6 +132,16 @@ ffmpeg -i input.avi -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus -b:a 160k output
 # AV1 (MP4/WebM) — best compression, but slowest to encode
 ffmpeg -i input.avi -c:v libsvtav1 -crf 30 -preset 6 -c:a libopus -b:a 160k output.mp4
 ```
+
+## How it talks to the camera
+
+The P2Pro shows up as a standard UVC webcam and requests raw `YUYV` frames at 256x384.
+The top half of that buffer is a normal 8-bit preview (ignored here) and the bottom half is actually raw 16-bit temperature samples packed into what looks like YUYV bytes.
+
+How that YUYV stream is obtained depends on the platform:
+
+- **Linux desktop**: opened directly via Video4Linux2.
+- **Android**: Android does not expose a V4L2. Instead, the app drives the P2Pro's USB Video Class protocol itself.
 
 ## Hardware specification
 

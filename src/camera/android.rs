@@ -167,7 +167,11 @@ async fn run_session(
         .await;
 
     // Configuration task.
-    let config_task = tokio::spawn(apply_config_updates(Arc::clone(&handle), from_ui.clone()));
+    let config_task = tokio::spawn(apply_config_updates(
+        Arc::clone(&handle),
+        from_ui.clone(),
+        to_ui.clone(),
+    ));
 
     // Main loop: UVC streaming.
     // This blocks for the duration of normal operation.
