@@ -41,13 +41,7 @@ pub async fn run(
     to_ui: mpsc::Sender<CaptureState>,
     from_ui: watch::Receiver<FromUi>,
 ) -> ah::Result<()> {
-    let collector = Collector {
-        reassembler: FrameReassembler::new(FRAME_BYTES),
-        renderer: Renderer::new(),
-        to_ui,
-        from_ui,
-    };
-
+    let collector = Collector::new(to_ui, from_ui);
     match negotiated.transfer_type {
         TransferType::Bulk => run_bulk(handle, negotiated, collector).await,
         TransferType::Isochronous => run_iso(handle, negotiated, collector).await,
@@ -61,9 +55,20 @@ struct Collector {
     renderer: Renderer,
     to_ui: mpsc::Sender<CaptureState>,
     from_ui: watch::Receiver<FromUi>,
+    errors: u8,
 }
 
 impl Collector {
+    fn new(to_ui: mpsc::Sender<CaptureState>, from_ui: watch::Receiver<FromUi>) -> Self {
+        Self {
+            to_ui,
+            from_ui,
+            reassembler: FrameReassembler::default(),
+            renderer: Renderer::default(),
+            errors: 0,
+        }
+    }
+
     fn feed_payload(&mut self, chunk: &[u8]) {
         if let Some(frame_bytes) = self.reassembler.feed(chunk) {
             let from_ui = self.from_ui.borrow().clone();
@@ -73,7 +78,13 @@ impl Collector {
                 WIDTH as usize * 2,
                 &from_ui,
             ) {
-                let _ = self.to_ui.blocking_send(CaptureState::Frame(frame));
+                if self.to_ui.try_send(CaptureState::Frame(frame)).is_err() {
+                    let errors = self.errors.saturating_add(1);
+                    if errors < 16 {
+                        log::error!("Failed to send UVC frame to UI (#{errors}).");
+                    }
+                    self.errors = errors;
+                }
             }
         }
     }
@@ -116,6 +127,12 @@ impl FrameReassembler {
         }
 
         eof.then(|| std::mem::replace(&mut self.buf, Vec::with_capacity(self.max_frame_size)))
+    }
+}
+
+impl Default for FrameReassembler {
+    fn default() -> Self {
+        Self::new(FRAME_BYTES)
     }
 }
 

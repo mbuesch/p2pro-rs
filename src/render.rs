@@ -129,3 +129,9 @@ impl Renderer {
         RenderedFrame { meta, rgba, uri }
     }
 }
+
+impl Default for Renderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
