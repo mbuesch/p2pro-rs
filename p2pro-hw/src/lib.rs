@@ -5,6 +5,7 @@
 use anyhow::{self as ah, Context as _, format_err as err};
 use std::{
     future::Future,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -139,6 +140,39 @@ impl CameraConfigHwAccess for nusb::Device {
             .map_err(|e| err!("USB control_in failed: {e}"))?;
         buf.copy_from_slice(&received[..length]);
         Ok(length)
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl<T: CameraConfigHwAccess + Send> CameraConfigHwAccess for Arc<tokio::sync::Mutex<T>> {
+    async fn write_control(
+        &self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        buf: &[u8],
+        timeout: Duration,
+    ) -> ah::Result<usize> {
+        self.lock()
+            .await
+            .write_control(request_type, request, value, index, buf, timeout)
+            .await
+    }
+
+    async fn read_control(
+        &self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        buf: &mut [u8],
+        timeout: Duration,
+    ) -> ah::Result<usize> {
+        self.lock()
+            .await
+            .read_control(request_type, request, value, index, buf, timeout)
+            .await
     }
 }
 
@@ -424,9 +458,12 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
         if self.dev_accessed {
             self.dev_accessed = false;
             let deadline = Instant::now() + READY_TIMEOUT;
+            #[cfg(feature = "tokio")]
             let mut interval = tokio::time::interval(POLL_INTERVAL);
             loop {
+                #[cfg(feature = "tokio")]
                 interval.tick().await;
+
                 let status = self.status().await?;
                 if status & STATUS_BUSY == 0 {
                     return Ok(());
@@ -437,6 +474,9 @@ impl<H: CameraConfigHwAccess> CameraConfig<H> {
                 if Instant::now() >= deadline {
                     return Err(err!("Timeout waiting for the camera to become ready"));
                 }
+
+                #[cfg(not(feature = "tokio"))]
+                std::thread::sleep(POLL_INTERVAL);
             }
         }
         Ok(())

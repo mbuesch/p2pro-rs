@@ -61,7 +61,7 @@ movavg.workspace = true
 oxideav-avi.workspace = true
 oxideav-core.workspace = true
 oxideav-huffyuv.workspace = true
-p2pro-hw = { path = "p2pro-hw" }
+p2pro-hw = { path = "p2pro-hw", default-features = false, features = [ "tokio" ] }
 rusb = { workspace = true, optional = true }
 nusb = { workspace = true, optional = true }
 tokio.workspace = true

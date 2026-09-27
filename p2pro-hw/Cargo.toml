@@ -15,9 +15,10 @@ keywords.workspace = true
 anyhow.workspace = true
 rusb = { workspace = true, optional = true }
 nusb = { workspace = true, optional = true }
-tokio.workspace = true
+tokio = { workspace = true, optional = true }
 
 [features]
-default = []
+default = [ "tokio", "rusb", "nusb" ]
 rusb = [ "dep:rusb" ]
 nusb = [ "dep:nusb" ]
+tokio = [ "dep:tokio" ]
