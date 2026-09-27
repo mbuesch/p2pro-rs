@@ -4,12 +4,13 @@
 //! Instead this talks to the P2Pro directly over USB as a userspace UVC driver using `libusb`/`rusb`.
 
 pub mod jni_bridge;
-mod protocol;
-mod stream;
 
 use crate::{
     app::FromUi,
-    camera::{CaptureState, PRODUCT_ID, VENDOR_ID},
+    camera::{
+        CaptureState, PRODUCT_ID, VENDOR_ID,
+        uvc::{protocol, stream},
+    },
 };
 use anyhow::{self as ah, Context as _};
 use jni_bridge::{SessionGuard, UsbEvent};

@@ -3,7 +3,7 @@
 
 use crate::{
     app::FromUi,
-    camera::{CaptureState, HEIGHT, WIDTH, android::protocol::Negotiated, decode_frame},
+    camera::{CaptureState, HEIGHT, WIDTH, decode_frame, uvc::protocol::Negotiated},
     render::Renderer,
     util::duration_to_timeval,
 };
