@@ -62,6 +62,26 @@ impl<C: rusb::UsbContext> CameraConfigHwAccess for rusb::DeviceHandle<C> {
 }
 
 #[cfg(feature = "nusb")]
+fn request_type_to_nusb(
+    request_type: u8,
+) -> ah::Result<(nusb::transfer::ControlType, nusb::transfer::Recipient)> {
+    let control_type = match (request_type >> 5) & 0x03 {
+        0 => nusb::transfer::ControlType::Standard,
+        1 => nusb::transfer::ControlType::Class,
+        2 => nusb::transfer::ControlType::Vendor,
+        _ => return Err(err!("Invalid control type")),
+    };
+    let recipient = match request_type & 0x1F {
+        0 => nusb::transfer::Recipient::Device,
+        1 => nusb::transfer::Recipient::Interface,
+        2 => nusb::transfer::Recipient::Endpoint,
+        3 => nusb::transfer::Recipient::Other,
+        _ => return Err(err!("Invalid recipient")),
+    };
+    Ok((control_type, recipient))
+}
+
+#[cfg(feature = "nusb")]
 impl CameraConfigHwAccess for nusb::Device {
     async fn write_control(
         &self,
@@ -72,19 +92,7 @@ impl CameraConfigHwAccess for nusb::Device {
         buf: &[u8],
         timeout: Duration,
     ) -> ah::Result<usize> {
-        let control_type = match (request_type >> 5) & 0x03 {
-            0 => nusb::transfer::ControlType::Standard,
-            1 => nusb::transfer::ControlType::Class,
-            2 => nusb::transfer::ControlType::Vendor,
-            _ => return Err(err!("Invalid control type")),
-        };
-        let recipient = match request_type & 0x1F {
-            0 => nusb::transfer::Recipient::Device,
-            1 => nusb::transfer::Recipient::Interface,
-            2 => nusb::transfer::Recipient::Endpoint,
-            3 => nusb::transfer::Recipient::Other,
-            _ => return Err(err!("Invalid recipient")),
-        };
+        let (control_type, recipient) = request_type_to_nusb(request_type)?;
         self.control_out(
             nusb::transfer::ControlOut {
                 control_type,
@@ -110,19 +118,7 @@ impl CameraConfigHwAccess for nusb::Device {
         buf: &mut [u8],
         timeout: Duration,
     ) -> ah::Result<usize> {
-        let control_type = match (request_type >> 5) & 0x03 {
-            0 => nusb::transfer::ControlType::Standard,
-            1 => nusb::transfer::ControlType::Class,
-            2 => nusb::transfer::ControlType::Vendor,
-            _ => return Err(err!("Invalid control type")),
-        };
-        let recipient = match request_type & 0x1F {
-            0 => nusb::transfer::Recipient::Device,
-            1 => nusb::transfer::Recipient::Interface,
-            2 => nusb::transfer::Recipient::Endpoint,
-            3 => nusb::transfer::Recipient::Other,
-            _ => return Err(err!("Invalid recipient")),
-        };
+        let (control_type, recipient) = request_type_to_nusb(request_type)?;
         let length = buf.len();
         let received = self
             .control_in(
