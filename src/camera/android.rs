@@ -16,7 +16,12 @@ use anyhow::{self as ah, Context as _};
 use jni_bridge::{SessionGuard, UsbEvent};
 use p2pro_hw::CameraConfig;
 use rusb::UsbContext;
-use std::{collections::VecDeque, os::fd::RawFd, sync::Arc, time::Duration};
+use std::{
+    collections::VecDeque,
+    os::fd::{AsRawFd as _, FromRawFd as _, OwnedFd},
+    sync::Arc,
+    time::Duration,
+};
 use tokio::sync::{Mutex as AsyncMutex, mpsc, watch};
 
 /// Bounded ring buffer of log lines that are shown on screen.
@@ -76,8 +81,12 @@ pub async fn capture_loop(to_ui: mpsc::Sender<CaptureState>, from_ui: watch::Rec
                 log.push(line);
             }
             UsbEvent::DeviceReady(fd, vendor_id, product_id, token) => {
+                // SAFETY: `fd` is a USB device file descriptor provided by the Android system.
+                let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+
                 log.push(format!(
-                    "Rust: received fd {fd} for {vendor_id:04x}:{product_id:04x}"
+                    "Rust: received fd {} for {vendor_id:04x}:{product_id:04x}",
+                    fd.as_raw_fd(),
                 ));
                 if vendor_id != VENDOR_ID || product_id != PRODUCT_ID {
                     log.push(format!(
@@ -103,7 +112,7 @@ pub async fn capture_loop(to_ui: mpsc::Sender<CaptureState>, from_ui: watch::Rec
 }
 
 async fn run_session(
-    fd: RawFd,
+    fd: OwnedFd,
     token: i64,
     to_ui: mpsc::Sender<CaptureState>,
     from_ui: watch::Receiver<FromUi>,
@@ -112,8 +121,8 @@ async fn run_session(
 
     let context = rusb::Context::new().context("Failed to create a libusb context")?;
 
-    // SAFETY: `fd` is a USB device file descriptor already opened.
-    let handle = unsafe { context.open_device_with_fd(fd) }
+    // SAFETY: `fd` is a USB device file descriptor.
+    let handle = unsafe { context.open_device_with_fd(fd.as_raw_fd()) }
         .context("Failed to wrap the Android USB file descriptor")?;
     let _ = to_ui
         .send(CaptureState::Info(
