@@ -54,10 +54,6 @@ h1 {
     cursor: pointer;
 }
 
-.hamburger:hover {
-    background: #34383f;
-}
-
 .hamburger span {
     display: block;
     height: 2px;
@@ -87,12 +83,6 @@ h1 {
     border-radius: 12px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
     z-index: 110;
-}
-
-.menu.text {
-    font-size: 0.9rem;
-    line-height: 1.35;
-    color: #e8e8e8;
 }
 
 .menu-checkbox {
@@ -283,15 +273,20 @@ h1 {
     cursor: pointer;
 }
 
-.control-btn:hover {
+.hamburger:hover,
+.control-btn:hover,
+.range-step:hover:not(:disabled) {
     background: #34383f;
 }
 
-.control-btn:active {
+.control-btn:active,
+.range-step:active:not(:disabled) {
     background: #3d424a;
 }
 
-.control-btn:disabled {
+.control-btn:disabled,
+.range-step:disabled,
+.range-input:disabled {
     opacity: 0.4;
     cursor: default;
 }
@@ -364,23 +359,6 @@ h1 {
     border-radius: 4px;
     cursor: pointer;
     touch-action: manipulation;
-}
-
-.range-step:hover:not(:disabled) {
-    background: #34383f;
-}
-
-.range-step:active:not(:disabled) {
-    background: #3d424a;
-}
-
-.range-step:disabled {
-    opacity: 0.4;
-    cursor: default;
-}
-
-.range-input:disabled {
-    opacity: 0.4;
 }
 
 .range-unit {
