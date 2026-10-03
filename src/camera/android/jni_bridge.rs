@@ -1,3 +1,4 @@
+use crate::render::{Rotation, set_display_rotation};
 use anyhow::{self as ah, Context as _, format_err as err};
 use jni::{
     Env, EnvUnowned, JavaVM,
@@ -254,6 +255,24 @@ pub extern "system" fn Java_dev_dioxus_main_MainActivity_nativeUsbLog<'a>(
                 eprintln!("Failed to send USB log event: {:?}", e);
             }
         }
+        Ok(())
+    })
+    .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// Called from Kotlin (`MainActivity.nativeDisplayRotation`) with the current
+/// `Surface.ROTATION_*` value of the display (0..=3).
+///
+/// The camera is fixed to the device and the image is upright in
+/// `ROTATION_90`, so the frame is turned by the difference to that.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_dioxus_main_MainActivity_nativeDisplayRotation<'a>(
+    mut env: EnvUnowned<'a>,
+    _this: JObject<'a>,
+    surface_rotation: i32,
+) {
+    env.with_env(|_env| -> Result<_, jni::errors::Error> {
+        set_display_rotation(Rotation::from_quarter_turns(surface_rotation - 1));
         Ok(())
     })
     .resolve::<ThrowRuntimeExAndDefault>()

@@ -90,6 +90,16 @@ class MainActivity : WryActivity() {
             nativeVideoFileReady(fd)
         }
 
+    private fun updateDisplayRotation() {
+        val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display?.rotation
+        } else {
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay.rotation
+        }
+        nativeDisplayRotation(rotation ?: 0)
+    }
+
     private fun hasCameraPermission(): Boolean =
         checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
@@ -143,6 +153,7 @@ class MainActivity : WryActivity() {
             registerReceiver(usbReceiver, filter)
         }
         setupEdgeToEdgeInsets()
+        updateDisplayRotation()
         handleLaunchIntent(intent, "onCreate")
     }
 
@@ -153,11 +164,13 @@ class MainActivity : WryActivity() {
 
     override fun onResume() {
         super.onResume()
+        updateDisplayRotation()
         scanUsbBus("onResume")
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        updateDisplayRotation()
         findViewById<View>(android.R.id.content)?.let { ViewCompat.requestApplyInsets(it) }
     }
 
@@ -323,6 +336,9 @@ class MainActivity : WryActivity() {
 
     /** Implemented in Rust, see src/camera/android/jni_bridge.rs. */
     private external fun nativeUsbDeviceReady(fd: Int, vendorId: Int, productId: Int, token: Long)
+
+    /** Implemented in Rust, see src/camera/android/jni_bridge.rs. */
+    private external fun nativeDisplayRotation(rotation: Int)
 
     /** Implemented in Rust, see src/camera/android/jni_bridge.rs. */
     private external fun nativeUsbLog(msg: String)
