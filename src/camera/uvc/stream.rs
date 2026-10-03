@@ -464,13 +464,25 @@ unsafe fn handle_iso_completion(transfer: *mut ffi::libusb_transfer) {
         unsafe { ffi::libusb_free_transfer(transfer) };
     } else {
         // Resubmit the transfer.
-        // Do not resubmit once the device is confirmed gone or resubmission
-        // fails (e.g. the device was unplugged) - stop tracking this transfer.
-        // It leaks, but that is harmless: it only happens as the stream is
-        // already on its way out. (It must not be freed here, because
-        // `run_iso`'s teardown still cancels it.)
-        // SAFETY: `transfer` is a valid.
-        if no_device || unsafe { ffi::libusb_submit_transfer(transfer) } != 0 {
+        let mut ret = 0;
+        if !no_device {
+            for attempt in 0..=MAX_ERROR_RETRIES {
+                // SAFETY: `transfer` is a valid, completed transfer.
+                ret = unsafe { ffi::libusb_submit_transfer(transfer) };
+                if ret == 0 {
+                    break;
+                }
+                if attempt < MAX_ERROR_RETRIES {
+                    log::warn!(
+                        "libusb_submit_transfer() failed ({ret}), retrying ({}/{})...",
+                        attempt + 1,
+                        MAX_ERROR_RETRIES
+                    );
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        }
+        if no_device || ret != 0 {
             user_data.device_gone = true;
             user_data.outstanding -= 1;
         }
