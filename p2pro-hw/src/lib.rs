@@ -5,9 +5,16 @@
 use anyhow::{self as ah, Context as _, format_err as err};
 use std::{
     future::Future,
-    sync::Arc,
     time::{Duration, Instant},
 };
+
+#[cfg(feature = "tokio")]
+use std::sync::Arc;
+
+/// InfiRay P2Pro USB vendor ID.
+pub const VENDOR_ID: u16 = 0x0bda;
+/// InfiRay P2Pro USB product ID.
+pub const PRODUCT_ID: u16 = 0x5830;
 
 /// P2Pro camera configuration hardware access abstraction.
 pub trait CameraConfigHwAccess {

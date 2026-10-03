@@ -24,6 +24,10 @@ install_p2prors()
         -o root -g root -m 0755 \
         "$bin" \
         /opt/p2pro-rs/bin/p2pro-rs
+    do_install \
+        -o root -g root -m 0755 \
+        "$bin_cli" \
+        /opt/p2pro-rs/bin/p2pro-cli
 }
 
 install_udev_rules()
@@ -40,6 +44,7 @@ install_udev_rules()
 }
 
 bin="$basedir/p2pro-rs-desktop-linux-x64"
+bin_cli="$basedir/p2pro-cli-desktop-linux-x64"
 
 install_entry_checks
 install_dirs

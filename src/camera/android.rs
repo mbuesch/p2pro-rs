@@ -8,13 +8,13 @@ pub mod jni_bridge;
 use crate::{
     app::FromUi,
     camera::{
-        CaptureState, PRODUCT_ID, VENDOR_ID, apply_config_updates,
+        CaptureState, apply_config_updates,
         uvc::{protocol, stream},
     },
 };
 use anyhow::{self as ah, Context as _};
 use jni_bridge::{SessionGuard, UsbEvent};
-use p2pro_hw::CameraConfig;
+use p2pro_hw::{CameraConfig, PRODUCT_ID, VENDOR_ID};
 use rusb::UsbContext;
 use std::{
     collections::VecDeque,

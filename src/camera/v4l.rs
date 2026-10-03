@@ -7,13 +7,11 @@
 
 use crate::{
     app::FromUi,
-    camera::{
-        CaptureState, HEIGHT, PRODUCT_ID, VENDOR_ID, WIDTH, apply_config_updates, decode_frame,
-    },
+    camera::{CaptureState, HEIGHT, WIDTH, apply_config_updates, decode_frame},
     render::Renderer,
 };
 use anyhow::{self as ah, Context as _, format_err as err};
-use p2pro_hw::CameraConfig;
+use p2pro_hw::{CameraConfig, PRODUCT_ID, VENDOR_ID};
 use std::{
     fs,
     path::{Path, PathBuf},

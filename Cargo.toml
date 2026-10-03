@@ -14,6 +14,7 @@ keywords.workspace = true
 [workspace]
 members = [
     "p2pro-hw",
+    "p2pro-cli",
 ]
 
 [workspace.package]
@@ -46,6 +47,7 @@ nusb = { version = "0.2", features = [ "tokio" ] }
 oxideav-avi = "0.0.10"
 oxideav-core = "0.1"
 oxideav-huffyuv = "0.0.3"
+p2pro-hw = { path = "p2pro-hw", default-features = false }
 rfd = { version = "0.17", default-features = false }
 rusb = { version = "0.9", features = [ "vendored" ] }
 tokio = { version = "1", default-features = false, features = [ "sync", "fs", "time", "rt-multi-thread" ] }
@@ -64,7 +66,7 @@ nusb = { workspace = true, optional = true }
 oxideav-avi.workspace = true
 oxideav-core.workspace = true
 oxideav-huffyuv.workspace = true
-p2pro-hw = { path = "p2pro-hw", default-features = false, features = [ "tokio" ] }
+p2pro-hw = { workspace = true, features = [ "tokio" ] }
 rusb = { workspace = true, optional = true }
 tokio.workspace = true
 

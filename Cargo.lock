@@ -3139,6 +3139,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "p2pro-cli"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "nusb",
+ "p2pro-hw",
+ "tokio",
+]
+
+[[package]]
 name = "p2pro-hw"
 version = "1.0.0"
 dependencies = [
