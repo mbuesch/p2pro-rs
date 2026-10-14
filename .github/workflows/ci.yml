@@ -78,7 +78,7 @@ jobs:
         if: matrix.toolchain.name == 'stable'
         id: setup-ndk
         with:
-          ndk-version: 'r29'
+          ndk-version: 'r30'
           link-to-sdk: true
           add-to-path: true
       - name: Show Android tools
