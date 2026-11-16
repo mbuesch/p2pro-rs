@@ -971,7 +971,7 @@ dependencies = [
  "objc_id",
  "percent-encoding",
  "rand 0.9.5",
- "rfd",
+ "rfd 0.17.2",
  "rustc-hash 2.1.3",
  "serde",
  "serde_json",
@@ -2968,6 +2968,7 @@ dependencies = [
  "objc2",
  "objc2-core-foundation",
  "objc2-foundation",
+ "objc2-uniform-type-identifiers",
 ]
 
 [[package]]
@@ -3027,6 +3028,16 @@ dependencies = [
  "bitflags 2.13.2",
  "objc2",
  "objc2-core-foundation",
+ "objc2-foundation",
+]
+
+[[package]]
+name = "objc2-uniform-type-identifiers"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7902ac02859fc1f7045f8b598c63f1ae0cc7efeaa06a9bc9f3d9a3c955974fa4"
+dependencies = [
+ "objc2",
  "objc2-foundation",
 ]
 
@@ -3116,9 +3127,9 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "oxideav-avi"
-version = "0.0.10"
+version = "0.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f47398d7debe2af6d69dd1f529bf70a6bf426326bdcffd22d386126997ac48a"
+checksum = "c028cd2f62f81f311cecea8009c5cb201a82700c70039b1e6c5e0e79b1eed63d"
 dependencies = [
  "oxideav-core",
 ]
@@ -3136,9 +3147,9 @@ dependencies = [
 
 [[package]]
 name = "oxideav-huffyuv"
-version = "0.0.3"
+version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4d54cbea4a5140b2400a4c80e1602f4eaffb653aac09a2367705e272964e430"
+checksum = "26e5bf160a1871c387d8ae637e2c246c7026dadae68ffff8402420aec943daab"
 dependencies = [
  "oxideav-core",
 ]
@@ -3186,7 +3197,7 @@ dependencies = [
  "oxideav-core",
  "oxideav-huffyuv",
  "p2pro-hw",
- "rfd",
+ "rfd 0.18.0",
  "rusb",
  "tokio",
  "v4l",
@@ -3447,6 +3458,12 @@ name = "pollster"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f3a9f18d041e6d0e102a0a46750538147e5e8992d3b4873aaafee2520b00ce3"
+
+[[package]]
+name = "pollster"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc6355899e1c9462875b6757c79f3caa011a1fdae12bbb1a2e72dd1f234f8336"
 
 [[package]]
 name = "potential_utf"
@@ -3885,7 +3902,32 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation",
  "percent-encoding",
- "pollster",
+ "pollster 0.4.0",
+ "raw-window-handle 0.6.2",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "rfd"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4b9d4857b10297ffb0f64cae711e983a7aeaee561848d56d429d3858bd8ed93"
+dependencies = [
+ "block2",
+ "dispatch2",
+ "js-sys",
+ "libc",
+ "log",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-core-foundation",
+ "objc2-foundation",
+ "objc2-uniform-type-identifiers",
+ "percent-encoding",
+ "pollster 1.0.1",
  "raw-window-handle 0.6.2",
  "wasm-bindgen",
  "wasm-bindgen-futures",
