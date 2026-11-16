@@ -20,7 +20,7 @@ members = [
 [workspace.package]
 version = "1.0.0"
 edition = "2024"
-rust-version = "1.91"
+rust-version = "1.95"
 license = "MIT"
 authors = [ "Michael Büsch <m@bues.ch>" ]
 homepage = "https://bues.ch/"
