@@ -24,7 +24,7 @@ Features:
 First install [Rust](https://www.rust-lang.org/tools/install) and then build the app:
 
 ```sh
-desktop-build-linux.sh
+./desktop-build-linux.sh
 ```
 
 Then run the built executable:
