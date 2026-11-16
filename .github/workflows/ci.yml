@@ -46,7 +46,7 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get remove -y needrestart || true
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev patchelf libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
 
       # Install toolchain
       - name: Install Rust toolchain
